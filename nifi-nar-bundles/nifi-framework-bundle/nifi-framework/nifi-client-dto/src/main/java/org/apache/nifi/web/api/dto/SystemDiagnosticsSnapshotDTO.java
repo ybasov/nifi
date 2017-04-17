@@ -16,15 +16,17 @@
  */
 package org.apache.nifi.web.api.dto;
 
-import com.wordnik.swagger.annotations.ApiModelProperty;
-import org.apache.nifi.web.api.dto.util.DateTimeAdapter;
-import org.apache.nifi.web.api.dto.util.TimeAdapter;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Set;
 
 import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
-import java.util.Date;
-import java.util.LinkedHashSet;
-import java.util.Set;
+
+import org.apache.nifi.web.api.dto.util.DateTimeAdapter;
+import org.apache.nifi.web.api.dto.util.TimeAdapter;
+
+import com.wordnik.swagger.annotations.ApiModelProperty;
 
 /**
  * The diagnostics of the system this NiFi is running on.
@@ -57,8 +59,6 @@ public class SystemDiagnosticsSnapshotDTO implements Cloneable {
 
     private Integer totalThreads;
     private Integer daemonThreads;
-
-    private String uptime;
 
     private StorageUsageDTO flowFileRepositoryStorageUsage;
     private Set<StorageUsageDTO> contentRepositoryStorageUsage;
@@ -317,15 +317,6 @@ public class SystemDiagnosticsSnapshotDTO implements Cloneable {
         this.versionInfo = versionInfo;
     }
 
-    @ApiModelProperty("The uptime of the Java virtual machine")
-    public String getUptime() {
-        return uptime;
-    }
-
-    public void setUptime(String uptime) {
-        this.uptime = uptime;
-    }
-
     @Override
     public SystemDiagnosticsSnapshotDTO clone() {
         final SystemDiagnosticsSnapshotDTO other = new SystemDiagnosticsSnapshotDTO();
@@ -355,21 +346,19 @@ public class SystemDiagnosticsSnapshotDTO implements Cloneable {
 
         other.setFlowFileRepositoryStorageUsage(getFlowFileRepositoryStorageUsage().clone());
 
-        final Set<StorageUsageDTO> contentRepoStorageUsage = new LinkedHashSet<>();
+        final Set<StorageUsageDTO> contentRepoStorageUsage = new HashSet<>();
         other.setContentRepositoryStorageUsage(contentRepoStorageUsage);
         for (final StorageUsageDTO usage : getContentRepositoryStorageUsage()) {
             contentRepoStorageUsage.add(usage.clone());
         }
 
-        final Set<GarbageCollectionDTO> gcUsage = new LinkedHashSet<>();
+        final Set<GarbageCollectionDTO> gcUsage = new HashSet<>();
         other.setGarbageCollection(gcUsage);
         for (final GarbageCollectionDTO gcDto : getGarbageCollection()) {
             gcUsage.add(gcDto.clone());
         }
 
         other.setVersionInfo(getVersionInfo().clone());
-
-        other.setUptime(getUptime());
 
         return other;
     }
@@ -580,7 +569,7 @@ public class SystemDiagnosticsSnapshotDTO implements Cloneable {
     @XmlType(name = "versionInfo")
     public static class VersionInfoDTO implements Cloneable {
 
-        private String niFiVersion;
+        private String nifiVersion;
         private String javaVendor;
         private String javaVersion;
         private String osName;
@@ -593,11 +582,11 @@ public class SystemDiagnosticsSnapshotDTO implements Cloneable {
 
         @ApiModelProperty("The version of this NiFi.")
         public String getNiFiVersion() {
-            return niFiVersion;
+            return nifiVersion;
         }
 
-        public void setNiFiVersion(String niFiVersion) {
-            this.niFiVersion = niFiVersion;
+        public void setNiFiVersion(String nifiVersion) {
+            this.nifiVersion = nifiVersion;
         }
 
         @ApiModelProperty("Java JVM vendor")

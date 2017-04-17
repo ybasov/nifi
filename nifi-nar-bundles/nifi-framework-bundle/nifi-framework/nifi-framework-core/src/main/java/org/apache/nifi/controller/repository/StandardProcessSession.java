@@ -16,32 +16,6 @@
  */
 package org.apache.nifi.controller.repository;
 
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayInputStream;
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
 import org.apache.commons.io.IOUtils;
 import org.apache.nifi.connectable.Connectable;
 import org.apache.nifi.connectable.Connection;
@@ -49,7 +23,6 @@ import org.apache.nifi.controller.ProcessorNode;
 import org.apache.nifi.controller.queue.FlowFileQueue;
 import org.apache.nifi.controller.queue.QueueSize;
 import org.apache.nifi.controller.repository.claim.ContentClaim;
-import org.apache.nifi.controller.repository.claim.ContentClaimWriteCache;
 import org.apache.nifi.controller.repository.claim.ResourceClaim;
 import org.apache.nifi.controller.repository.io.DisableOnCloseInputStream;
 import org.apache.nifi.controller.repository.io.DisableOnCloseOutputStream;
@@ -74,11 +47,37 @@ import org.apache.nifi.provenance.ProvenanceEventRepository;
 import org.apache.nifi.provenance.ProvenanceEventType;
 import org.apache.nifi.provenance.ProvenanceReporter;
 import org.apache.nifi.provenance.StandardProvenanceEventRecord;
+import org.apache.nifi.stream.io.BufferedOutputStream;
 import org.apache.nifi.stream.io.ByteCountingInputStream;
 import org.apache.nifi.stream.io.ByteCountingOutputStream;
 import org.apache.nifi.stream.io.StreamUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayInputStream;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -144,7 +143,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
     private final Map<FlowFile, ProvenanceEventBuilder> forkEventBuilders = new HashMap<>();
 
     private Checkpoint checkpoint = new Checkpoint();
-    private final ContentClaimWriteCache claimCache;
 
     public StandardProcessSession(final ProcessContext context) {
         this.context = context;
@@ -182,7 +180,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
             context.getProvenanceRepository(), this);
         this.sessionId = idGenerator.getAndIncrement();
         this.connectableDescription = description;
-        this.claimCache = new ContentClaimWriteCache(context.getContentRepository());
+
         LOG.trace("Session {} created for {}", this, connectableDescription);
         processingStartTime = System.nanoTime();
     }
@@ -314,11 +312,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
             final long commitStartNanos = System.nanoTime();
 
             resetReadClaim();
-            try {
-                claimCache.flush();
-            } finally {
-                claimCache.reset();
-            }
 
             final long updateProvenanceStart = System.nanoTime();
             updateProvenanceRepo(checkpoint);
@@ -382,7 +375,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
             updateEventRepository(checkpoint);
 
             final long updateEventRepositoryFinishNanos = System.nanoTime();
-            final long updateEventRepositoryNanos = updateEventRepositoryFinishNanos - flowFileRepoUpdateFinishNanos;
+            final long updateEventRepositoryNanos = updateEventRepositoryFinishNanos - claimRemovalFinishNanos;
 
             // transfer the flowfiles to the connections' queues.
             final Map<FlowFileQueue, Collection<FlowFileRecord>> recordMap = new HashMap<>();
@@ -461,12 +454,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
             } catch (final Exception e1) {
                 e.addSuppressed(e1);
             }
-
-            if (e instanceof RuntimeException) {
-                throw (RuntimeException) e;
-            } else {
-                throw new ProcessException(e);
-            }
+            throw e;
         }
     }
 
@@ -916,12 +904,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
             }
         }
 
-        try {
-            claimCache.reset();
-        } catch (IOException e1) {
-            LOG.warn("{} Attempted to close Output Stream for {} due to session rollback but close failed", this, this.connectableDescription, e1);
-        }
-
         final Set<StandardRepositoryRecord> recordsToHandle = new HashSet<>();
         recordsToHandle.addAll(records.values());
         if (rollbackCheckpoint) {
@@ -985,23 +967,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
                 context.getFlowFileRepository().updateRepository(abortedRecords);
             } catch (final IOException ioe) {
                 LOG.error("Unable to update FlowFile repository for aborted records due to {}", ioe.toString());
-                if (LOG.isDebugEnabled()) {
-                    LOG.error("", ioe);
-                }
-            }
-        }
-
-        // If we have transient claims that need to be cleaned up, do so.
-        final List<ContentClaim> transientClaims = recordsToHandle.stream()
-            .flatMap(record -> record.getTransientClaims().stream())
-            .collect(Collectors.toList());
-
-        if (!transientClaims.isEmpty()) {
-            final RepositoryRecord repoRecord = new TransientClaimRepositoryRecord(transientClaims);
-            try {
-                context.getFlowFileRepository().updateRepository(Collections.singletonList(repoRecord));
-            } catch (final IOException ioe) {
-                LOG.error("Unable to update FlowFile repository to cleanup transient claims due to {}", ioe.toString());
                 if (LOG.isDebugEnabled()) {
                     LOG.error("", ioe);
                 }
@@ -1631,7 +1596,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
             context.getContentRepository().incrementClaimaintCount(claim);
         }
         final StandardRepositoryRecord record = new StandardRepositoryRecord(null);
-        record.setWorking(clone, clone.getAttributes());
+        record.setWorking(clone, Collections.<String, String> emptyMap());
         records.put(clone, record);
 
         if (offset == 0L && size == example.getSize()) {
@@ -2051,7 +2016,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
                     }
                 }
 
-                claimCache.flush(claim);
                 final InputStream rawInStream = context.getContentRepository().read(claim);
 
                 if (currentReadClaimStream != null) {
@@ -2066,7 +2030,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
                 // reuse the same InputStream for the next FlowFile
                 return new DisableOnCloseInputStream(currentReadClaimStream);
             } else {
-                claimCache.flush(claim);
                 final InputStream rawInStream = context.getContentRepository().read(claim);
                 try {
                     StreamUtils.skip(rawInStream, offset);
@@ -2097,7 +2060,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
 
         try {
             ensureNotAppending(record.getCurrentClaim());
-            claimCache.flush(record.getCurrentClaim());
         } catch (final IOException e) {
             throw new FlowFileAccessException("Failed to access ContentClaim for " + source.toString(), e);
         }
@@ -2157,11 +2119,10 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
 
         final InputStream rawIn = getInputStream(source, record.getCurrentClaim(), record.getCurrentClaimOffset(), false);
         final InputStream limitedIn = new LimitedInputStream(rawIn, source.getSize());
-        final ByteCountingInputStream countingStream = new ByteCountingInputStream(limitedIn);
+        final ByteCountingInputStream countingStream = new ByteCountingInputStream(limitedIn, this.bytesRead);
         final FlowFileAccessInputStream ffais = new FlowFileAccessInputStream(countingStream, source, record.getCurrentClaim());
 
         final InputStream errorHandlingStream = new InputStream() {
-            private boolean closed = false;
 
             @Override
             public int read() throws IOException {
@@ -2202,10 +2163,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
 
             @Override
             public void close() throws IOException {
-                if (!closed) {
-                    StandardProcessSession.this.bytesRead += countingStream.getBytesRead();
-                    closed = true;
-                }
+                StandardProcessSession.this.bytesRead += countingStream.getBytesRead();
 
                 ffais.close();
                 openInputStreams.remove(source);
@@ -2266,7 +2224,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
 
             try {
                 ensureNotAppending(record.getCurrentClaim());
-                claimCache.flush(record.getCurrentClaim());
             } catch (final IOException e) {
                 throw new FlowFileAccessException("Unable to read from source " + source + " due to " + e.toString(), e);
             }
@@ -2360,11 +2317,11 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
         long writtenToFlowFile = 0L;
         ContentClaim newClaim = null;
         try {
-            newClaim = claimCache.getContentClaim();
+            newClaim = context.getContentRepository().create(context.getConnectable().isLossTolerant());
             claimLog.debug("Creating ContentClaim {} for 'write' for {}", newClaim, source);
 
             ensureNotAppending(newClaim);
-            try (final OutputStream stream = claimCache.write(newClaim);
+            try (final OutputStream stream = context.getContentRepository().write(newClaim);
                 final OutputStream disableOnClose = new DisableOnCloseOutputStream(stream);
                 final ByteCountingOutputStream countingOut = new ByteCountingOutputStream(disableOnClose)) {
                 try {
@@ -2399,7 +2356,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
         final FlowFileRecord newFile = new StandardFlowFileRecord.Builder()
             .fromFlowFile(record.getCurrent())
             .contentClaim(newClaim)
-            .contentClaimOffset(Math.max(0, newClaim.getLength() - writtenToFlowFile))
+            .contentClaimOffset(0)
             .size(writtenToFlowFile)
             .build();
 
@@ -2422,8 +2379,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
         ContentClaim newClaim = null;
         try {
             if (outStream == null) {
-                claimCache.flush(oldClaim);
-
                 try (final InputStream oldClaimIn = context.getContentRepository().read(oldClaim)) {
                     newClaim = context.getContentRepository().create(context.getConnectable().isLossTolerant());
                     claimLog.debug("Creating ContentClaim {} for 'append' for {}", newClaim, source);
@@ -2596,20 +2551,16 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
         long writtenToFlowFile = 0L;
         ContentClaim newClaim = null;
         try {
-            newClaim = claimCache.getContentClaim();
+            newClaim = context.getContentRepository().create(context.getConnectable().isLossTolerant());
             claimLog.debug("Creating ContentClaim {} for 'write' for {}", newClaim, source);
 
             ensureNotAppending(newClaim);
-
-            if (currClaim != null) {
-                claimCache.flush(currClaim.getResourceClaim());
-            }
 
             try (final InputStream is = getInputStream(source, currClaim, record.getCurrentClaimOffset(), true);
                 final InputStream limitedIn = new LimitedInputStream(is, source.getSize());
                 final InputStream disableOnCloseIn = new DisableOnCloseInputStream(limitedIn);
                 final ByteCountingInputStream countingIn = new ByteCountingInputStream(disableOnCloseIn, bytesRead);
-                final OutputStream os = claimCache.write(newClaim);
+                final OutputStream os = context.getContentRepository().write(newClaim);
                 final OutputStream disableOnCloseOut = new DisableOnCloseOutputStream(os);
                 final ByteCountingOutputStream countingOut = new ByteCountingOutputStream(disableOnCloseOut)) {
 
@@ -2658,7 +2609,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
         final FlowFileRecord newFile = new StandardFlowFileRecord.Builder()
             .fromFlowFile(record.getCurrent())
             .contentClaim(newClaim)
-            .contentClaimOffset(Math.max(0L, newClaim.getLength() - writtenToFlowFile))
+            .contentClaimOffset(0L)
             .size(writtenToFlowFile)
             .build();
 
@@ -2700,11 +2651,8 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
 
         removeTemporaryClaim(record);
 
-        final FlowFileRecord newFile = new StandardFlowFileRecord.Builder()
-            .fromFlowFile(record.getCurrent())
-            .contentClaim(newClaim)
-            .contentClaimOffset(claimOffset)
-            .size(newSize)
+        final FlowFileRecord newFile = new StandardFlowFileRecord.Builder().fromFlowFile(record.getCurrent())
+            .contentClaim(newClaim).contentClaimOffset(claimOffset).size(newSize)
             .addAttribute(CoreAttributes.FILENAME.key(), source.toFile().getName())
             .build();
         record.setWorking(newFile, CoreAttributes.FILENAME.key(), source.toFile().getName());
@@ -2743,12 +2691,7 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
         }
 
         removeTemporaryClaim(record);
-        final FlowFileRecord newFile = new StandardFlowFileRecord.Builder()
-            .fromFlowFile(record.getCurrent())
-            .contentClaim(newClaim)
-            .contentClaimOffset(claimOffset)
-            .size(newSize)
-            .build();
+        final FlowFileRecord newFile = new StandardFlowFileRecord.Builder().fromFlowFile(record.getCurrent()).contentClaim(newClaim).contentClaimOffset(claimOffset).size(newSize).build();
         record.setWorking(newFile);
         return newFile;
     }
@@ -2760,7 +2703,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
         try {
             ensureNotAppending(record.getCurrentClaim());
 
-            claimCache.flush(record.getCurrentClaim());
             final long copyCount = context.getContentRepository().exportTo(record.getCurrentClaim(), destination, append, record.getCurrentClaimOffset(), source.getSize());
             bytesRead += copyCount;
             bytesWritten += copyCount;
@@ -2782,7 +2724,6 @@ public final class StandardProcessSession implements ProcessSession, ProvenanceE
 
         try {
             ensureNotAppending(record.getCurrentClaim());
-            claimCache.flush(record.getCurrentClaim());
         } catch (final IOException e) {
             throw new FlowFileAccessException("Failed to access ContentClaim for " + source.toString(), e);
         }

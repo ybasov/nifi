@@ -47,8 +47,6 @@ public interface ReportingTaskNode extends ConfiguredComponent {
 
     ReportingTask getReportingTask();
 
-    void setReportingTask(LoggableComponent<ReportingTask> reportingTask);
-
     ReportingContext getReportingContext();
 
     ConfigurationContext getConfigurationContext();

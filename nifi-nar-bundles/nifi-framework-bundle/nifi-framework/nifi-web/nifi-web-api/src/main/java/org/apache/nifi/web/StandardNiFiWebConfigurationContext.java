@@ -45,7 +45,7 @@ import org.apache.nifi.authorization.AuthorizationResult;
 import org.apache.nifi.authorization.AuthorizationResult.Result;
 import org.apache.nifi.authorization.AuthorizeControllerServiceReference;
 import org.apache.nifi.authorization.Authorizer;
-import org.apache.nifi.authorization.ComponentAuthorizable;
+import org.apache.nifi.authorization.ConfigurableComponentAuthorizable;
 import org.apache.nifi.authorization.RequestAction;
 import org.apache.nifi.authorization.UserContextKeys;
 import org.apache.nifi.authorization.resource.Authorizable;
@@ -114,12 +114,12 @@ public class StandardNiFiWebConfigurationContext implements NiFiWebConfiguration
                     .accessAttempt(true)
                     .action(RequestAction.READ)
                     .userContext(userContext)
-                    .explanationSupplier(() -> "Unable to view the user interface.")
                     .build();
 
             final AuthorizationResult result = authorizer.authorize(request);
             if (!Result.Approved.equals(result.getResult())) {
-                throw new AccessDeniedException(result.getExplanation());
+                final String message = StringUtils.isNotBlank(result.getExplanation()) ? result.getExplanation() : "Access is denied";
+                throw new AccessDeniedException(message);
             }
         });
     }
@@ -396,7 +396,7 @@ public class StandardNiFiWebConfigurationContext implements NiFiWebConfiguration
             // authorize access
             serviceFacade.authorizeAccess(lookup -> {
                 // authorize the processor
-                final ComponentAuthorizable authorizable = lookup.getProcessor(id);
+                final ConfigurableComponentAuthorizable authorizable = lookup.getProcessor(id);
                 authorizable.getAuthorizable().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
 
                 // authorize any referenced service
@@ -587,7 +587,7 @@ public class StandardNiFiWebConfigurationContext implements NiFiWebConfiguration
             // authorize access
             serviceFacade.authorizeAccess(lookup -> {
                 // authorize the controller service
-                final ComponentAuthorizable authorizable = lookup.getControllerService(id);
+                final ConfigurableComponentAuthorizable authorizable = lookup.getControllerService(id);
                 authorizable.getAuthorizable().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
 
                 // authorize any referenced service
@@ -752,7 +752,7 @@ public class StandardNiFiWebConfigurationContext implements NiFiWebConfiguration
             // authorize access
             serviceFacade.authorizeAccess(lookup -> {
                 // authorize the reporting task
-                final ComponentAuthorizable authorizable = lookup.getReportingTask(id);
+                final ConfigurableComponentAuthorizable authorizable = lookup.getReportingTask(id);
                 authorizable.getAuthorizable().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
 
                 // authorize any referenced service

@@ -19,17 +19,13 @@ package org.apache.nifi.distributed.cache.server.map;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.apache.nifi.distributed.cache.server.EvictionPolicy;
 
@@ -88,7 +84,16 @@ public class SimpleMapCache implements MapCache {
             final MapCacheRecord record = cache.get(key);
             if (record == null) {
                 // Record is null. We will add.
-                return put(key, value, record);
+                final MapCacheRecord evicted = evict();
+                final MapCacheRecord newRecord = new MapCacheRecord(key, value);
+                cache.put(key, newRecord);
+                inverseCacheMap.put(newRecord, key);
+
+                if (evicted == null) {
+                    return new MapPutResult(true, key, value, null, null, null);
+                } else {
+                    return new MapPutResult(true, key, value, null, evicted.getKey(), evicted.getValue());
+                }
             }
 
             // Record is not null. Increment hit count and return result indicating that record was not added.
@@ -96,37 +101,29 @@ public class SimpleMapCache implements MapCache {
             record.hit();
             inverseCacheMap.put(record, key);
 
-            return new MapPutResult(false, record, record, null);
+            return new MapPutResult(false, key, value, record.getValue(), null, null);
         } finally {
             writeLock.unlock();
         }
     }
 
-    private MapPutResult put(final ByteBuffer key, final ByteBuffer value, final MapCacheRecord existing) {
-        // evict if we need to in order to make room for a new entry.
-        final MapCacheRecord evicted = evict();
-
-        final long revision;
-        if (existing == null) {
-            revision = 0;
-        } else {
-            revision = existing.getRevision() + 1;
-            inverseCacheMap.remove(existing);
-        }
-
-        final MapCacheRecord record = new MapCacheRecord(key, value, revision);
-        cache.put(key, record);
-        inverseCacheMap.put(record, key);
-
-        return new MapPutResult(true, record, existing, evicted);
-    }
 
     @Override
-    public MapPutResult put(final ByteBuffer key, final ByteBuffer value) throws IOException {
+    public MapPutResult put(final ByteBuffer key, final ByteBuffer value) {
         writeLock.lock();
         try {
-            final MapCacheRecord existing = cache.get(key);
-            return put(key, value, existing);
+            // evict if we need to in order to make room for a new entry.
+            final MapCacheRecord evicted = evict();
+
+            final MapCacheRecord record = new MapCacheRecord(key, value);
+            final MapCacheRecord existing = cache.put(key, record);
+            inverseCacheMap.put(record, key);
+
+            final ByteBuffer existingValue = (existing == null) ? null : existing.getValue();
+            final ByteBuffer evictedKey = (evicted == null) ? null : evicted.getKey();
+            final ByteBuffer evictedValue = (evicted == null) ? null : evicted.getValue();
+
+            return new MapPutResult(true, key, value, existingValue, evictedKey, evictedValue);
         } finally {
             writeLock.unlock();
         }
@@ -180,69 +177,6 @@ public class SimpleMapCache implements MapCache {
             }
             inverseCacheMap.remove(record);
             return record.getValue();
-        } finally {
-            writeLock.unlock();
-        }
-    }
-
-    @Override
-    public Map<ByteBuffer, ByteBuffer> removeByPattern(String regex) throws IOException {
-        writeLock.lock();
-        try {
-            final Map<ByteBuffer, ByteBuffer> removedMap = new HashMap<>();
-            final List<MapCacheRecord> removedRecords = new ArrayList<>();
-            Pattern p = Pattern.compile(regex);
-            for (ByteBuffer key : cache.keySet()) {
-                // Key must be backed by something that array() returns a byte[] that can be converted into a String via the default charset
-                Matcher m = p.matcher(new String(key.array()));
-                if (m.matches()) {
-                    removedRecords.add(cache.get(key));
-                }
-            }
-            removedRecords.forEach((record) -> {
-                cache.remove(record.getKey());
-                inverseCacheMap.remove(record);
-                removedMap.put(record.getKey(), record.getValue());
-            });
-
-            return removedMap;
-        } finally {
-            writeLock.unlock();
-        }
-    }
-
-    @Override
-    public MapCacheRecord fetch(ByteBuffer key) throws IOException {
-        readLock.lock();
-        try {
-            final MapCacheRecord record = cache.get(key);
-            if (record == null) {
-                return null;
-            }
-
-            inverseCacheMap.remove(record);
-            record.hit();
-            inverseCacheMap.put(record, key);
-
-            return record;
-        } finally {
-            readLock.unlock();
-        }
-    }
-
-    @Override
-    public MapPutResult replace(MapCacheRecord inputRecord) throws IOException {
-        writeLock.lock();
-        try {
-            final ByteBuffer key = inputRecord.getKey();
-            final ByteBuffer value = inputRecord.getValue();
-            final MapCacheRecord existing = fetch(key);
-            if (existing != null && inputRecord.getRevision() != existing.getRevision()) {
-                // The key has been updated by other operation.
-                return new MapPutResult(false, inputRecord, existing, null);
-            }
-
-            return put(key, value, existing);
         } finally {
             writeLock.unlock();
         }

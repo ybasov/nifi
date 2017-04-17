@@ -15,31 +15,9 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, Slick */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'Slick',
-                'nf.Common',
-                'nf.ErrorHandler'],
-            function ($, Slick, nfCommon, nfErrorHandler) {
-                return (nf.CountersTable = factory($, Slick, nfCommon, nfErrorHandler));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.CountersTable =
-            factory(require('jquery'),
-                require('Slick'),
-                require('nf.Common'),
-                require('nf.ErrorHandler')));
-    } else {
-        nf.CountersTable = factory(root.$,
-            root.Slick,
-            root.nf.Common,
-            root.nf.ErrorHandler);
-    }
-}(this, function ($, Slick, nfCommon, nfErrorHandler) {
-    'use strict';
+nf.CountersTable = (function () {
 
     /**
      * Configuration object used to hold a number of configuration items.
@@ -52,7 +30,7 @@
 
     /**
      * Sorts the specified data using the specified sort details.
-     *
+     * 
      * @param {object} sortDetails
      * @param {object} data
      */
@@ -60,12 +38,12 @@
         // defines a function for sorting
         var comparer = function (a, b) {
             if (sortDetails.columnId === 'value') {
-                var aCount = nfCommon.parseCount(a[sortDetails.columnId]);
-                var bCount = nfCommon.parseCount(b[sortDetails.columnId]);
+                var aCount = nf.Common.parseCount(a[sortDetails.columnId]);
+                var bCount = nf.Common.parseCount(b[sortDetails.columnId]);
                 return aCount - bCount;
             } else {
-                var aString = nfCommon.isDefinedAndNotNull(a[sortDetails.columnId]) ? a[sortDetails.columnId] : '';
-                var bString = nfCommon.isDefinedAndNotNull(b[sortDetails.columnId]) ? b[sortDetails.columnId] : '';
+                var aString = nf.Common.isDefinedAndNotNull(a[sortDetails.columnId]) ? a[sortDetails.columnId] : '';
+                var bString = nf.Common.isDefinedAndNotNull(b[sortDetails.columnId]) ? b[sortDetails.columnId] : '';
                 return aString === bString ? 0 : aString > bString ? 1 : -1;
             }
         };
@@ -91,7 +69,7 @@
         var countersGrid = $('#counters-table').data('gridInstance');
 
         // ensure the grid has been initialized
-        if (nfCommon.isDefinedAndNotNull(countersGrid)) {
+        if (nf.Common.isDefinedAndNotNull(countersGrid)) {
             var countersData = countersGrid.getData();
 
             // update the search criteria
@@ -105,7 +83,7 @@
 
     /**
      * Performs the filtering.
-     *
+     * 
      * @param {object} item     The item subject to filtering
      * @param {object} args     Filter arguments
      * @returns {Boolean}       Whether or not to include the item
@@ -126,10 +104,10 @@
         // perform the filter
         return item[args.property].search(filterExp) >= 0;
     };
-
+    
     /**
      * Resets the specified counter.
-     *
+     * 
      * @argument {object} item     The counter item
      */
     var resetCounter = function (item) {
@@ -144,7 +122,7 @@
             var countersGrid = $('#counters-table').data('gridInstance');
             var countersData = countersGrid.getData();
             countersData.updateItem(counter.id, counter);
-        }).fail(nfErrorHandler.handleAjaxError);
+        }).fail(nf.Common.handleAjaxError);
     };
 
     return {
@@ -160,12 +138,12 @@
             // filter type
             $('#counters-filter-type').combo({
                 options: [{
-                    text: 'by name',
-                    value: 'name'
-                }, {
-                    text: 'by context',
-                    value: 'context'
-                }],
+                        text: 'by name',
+                        value: 'name'
+                    }, {
+                        text: 'by context',
+                        value: 'context'
+                    }],
                 select: function (option) {
                     applyFilter();
                 }
@@ -173,47 +151,20 @@
 
             // initialize the templates table
             var countersColumns = [
-                {
-                    id: 'context',
-                    name: 'Context',
-                    field: 'context',
-                    sortable: true,
-                    resizable: true
-                },
-                {
-                    id: 'name',
-                    name: 'Name',
-                    field: 'name',
-                    sortable: true,
-                    resizable: true
-                },
-                {
-                    id: 'value',
-                    name: 'Value',
-                    field: 'value',
-                    sortable: true,
-                    resizable: true,
-                    defaultSortAsc: false
-                }
+                {id: 'context', name: 'Context', field: 'context', sortable: true, resizable: true},
+                {id: 'name', name: 'Name', field: 'name', sortable: true, resizable: true},
+                {id: 'value', name: 'Value', field: 'value', sortable: true, resizable: true, defaultSortAsc: false}
             ];
 
             // only allow dfm's to reset counters
-            if (nfCommon.canModifyCounters()) {
+            if (nf.Common.canModifyCounters()) {
                 // function for formatting the actions column
                 var actionFormatter = function (row, cell, value, columnDef, dataContext) {
-                    return '<div title="Reset Counter" class="pointer reset-counter fa fa-undo" style="margin-top: 2px;"></div>';
+                    return '<div title="Connect" class="pointer reset-counter fa fa-undo" style="margin-top: 2px;"></div>';
                 };
 
                 // add the action column
-                countersColumns.push({
-                    id: 'actions',
-                    name: '&nbsp;',
-                    sortable: false,
-                    resizable: false,
-                    formatter: actionFormatter,
-                    width: 100,
-                    maxWidth: 100
-                });
+                countersColumns.push({id: 'actions', name: '&nbsp;', sortable: false, resizable: false, formatter: actionFormatter, width: 100, maxWidth: 100});
             }
 
             var countersOptions = {
@@ -253,7 +204,7 @@
                     sortAsc: args.sortAsc
                 }, countersData);
             });
-
+            
             // configure a click listener
             countersGrid.onClick.subscribe(function (e, args) {
                 var target = $(e.target);
@@ -288,17 +239,17 @@
             // initialize the number of display items
             $('#displayed-counters').text('0');
         },
-
+        
         /**
          * Update the size of the grid based on its container's current size.
          */
         resetTableSize: function () {
             var countersGrid = $('#counters-table').data('gridInstance');
-            if (nfCommon.isDefinedAndNotNull(countersGrid)) {
+            if (nf.Common.isDefinedAndNotNull(countersGrid)) {
                 countersGrid.resizeCanvas();
             }
         },
-
+        
         /**
          * Load the processor counters table.
          */
@@ -312,7 +263,7 @@
                 var aggregateSnapshot = report.aggregateSnapshot;
 
                 // ensure there are groups specified
-                if (nfCommon.isDefinedAndNotNull(aggregateSnapshot.counters)) {
+                if (nf.Common.isDefinedAndNotNull(aggregateSnapshot.counters)) {
                     var countersGrid = $('#counters-table').data('gridInstance');
                     var countersData = countersGrid.getData();
 
@@ -329,7 +280,7 @@
                 } else {
                     $('#total-counters').text('0');
                 }
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         }
     };
-}));
+}());

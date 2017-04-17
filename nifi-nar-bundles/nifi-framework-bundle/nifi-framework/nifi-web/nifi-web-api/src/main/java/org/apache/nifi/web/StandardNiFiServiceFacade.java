@@ -49,10 +49,8 @@ import org.apache.nifi.cluster.coordination.node.DisconnectionCode;
 import org.apache.nifi.cluster.coordination.node.NodeConnectionState;
 import org.apache.nifi.cluster.coordination.node.NodeConnectionStatus;
 import org.apache.nifi.cluster.event.NodeEvent;
-import org.apache.nifi.cluster.manager.exception.IllegalNodeDeletionException;
 import org.apache.nifi.cluster.manager.exception.UnknownNodeException;
 import org.apache.nifi.cluster.protocol.NodeIdentifier;
-import org.apache.nifi.components.ConfigurableComponent;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
@@ -84,7 +82,6 @@ import org.apache.nifi.groups.RemoteProcessGroup;
 import org.apache.nifi.history.History;
 import org.apache.nifi.history.HistoryQuery;
 import org.apache.nifi.history.PreviousValue;
-import org.apache.nifi.processor.Processor;
 import org.apache.nifi.remote.RootGroupPort;
 import org.apache.nifi.reporting.Bulletin;
 import org.apache.nifi.reporting.BulletinQuery;
@@ -398,18 +395,11 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
     }
 
     @Override
-    public void verifyCreateProcessor(ProcessorDTO processorDTO) {
-        processorDAO.verifyCreate(processorDTO);
-    }
-
-    @Override
     public void verifyUpdateProcessor(final ProcessorDTO processorDTO) {
         // if group does not exist, then the update request is likely creating it
         // so we don't verify since it will fail
         if (processorDAO.hasProcessor(processorDTO.getId())) {
             processorDAO.verifyUpdate(processorDTO);
-        } else {
-            verifyCreateProcessor(processorDTO);
         }
     }
 
@@ -453,18 +443,11 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
     }
 
     @Override
-    public void verifyCreateControllerService(ControllerServiceDTO controllerServiceDTO) {
-        controllerServiceDAO.verifyCreate(controllerServiceDTO);
-    }
-
-    @Override
     public void verifyUpdateControllerService(final ControllerServiceDTO controllerServiceDTO) {
         // if service does not exist, then the update request is likely creating it
         // so we don't verify since it will fail
         if (controllerServiceDAO.hasControllerService(controllerServiceDTO.getId())) {
             controllerServiceDAO.verifyUpdate(controllerServiceDTO);
-        } else {
-            verifyCreateControllerService(controllerServiceDTO);
         }
     }
 
@@ -479,18 +462,11 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
     }
 
     @Override
-    public void verifyCreateReportingTask(ReportingTaskDTO reportingTaskDTO) {
-        reportingTaskDAO.verifyCreate(reportingTaskDTO);
-    }
-
-    @Override
     public void verifyUpdateReportingTask(final ReportingTaskDTO reportingTaskDTO) {
         // if tasks does not exist, then the update request is likely creating it
         // so we don't verify since it will fail
         if (reportingTaskDAO.hasReportingTask(reportingTaskDTO.getId())) {
             reportingTaskDAO.verifyUpdate(reportingTaskDTO);
-        } else {
-            verifyCreateReportingTask(reportingTaskDTO);
         }
     }
 
@@ -987,11 +963,6 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                     public String getName() {
                         return resourceIdentifier;
                     }
-
-                    @Override
-                    public String getSafeDescription() {
-                        return "User " + userId;
-                    }
                 },
                 () -> userDAO.deleteUser(userId),
                 false, // no user specific policies to remove
@@ -1022,11 +993,6 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                     public String getName() {
                         return resourceIdentifier;
                     }
-
-                    @Override
-                    public String getSafeDescription() {
-                        return "User Group " + userGroupId;
-                    }
                 },
                 () -> userGroupDAO.deleteUserGroup(userGroupId),
                 false, // no user group specific policies to remove
@@ -1053,11 +1019,6 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                     @Override
                     public String getName() {
                         return accessPolicy.getResource();
-                    }
-
-                    @Override
-                    public String getSafeDescription() {
-                        return "Policy " + accessPolicyId;
                     }
                 },
                 () -> accessPolicyDAO.deleteAccessPolicy(accessPolicyId),
@@ -1680,8 +1641,8 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                     }
 
                     try {
-                        final ConfigurableComponent configurableComponent = controllerFacade.getTemporaryComponent(dto.getType(), dto.getBundle());
-                        configurableComponent.getPropertyDescriptors().forEach(descriptor -> {
+                        final ControllerService controllerService = controllerFacade.createTemporaryControllerService(dto.getType()).getControllerServiceImplementation();
+                        controllerService.getPropertyDescriptors().forEach(descriptor -> {
                             if (dto.getProperties().get(descriptor.getName()) == null) {
                                 dto.getProperties().put(descriptor.getName(), descriptor.getDefaultValue());
                             }
@@ -1704,8 +1665,8 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                     }
 
                     try {
-                        final ConfigurableComponent configurableComponent = controllerFacade.getTemporaryComponent(dto.getType(), dto.getBundle());
-                        configurableComponent.getPropertyDescriptors().forEach(descriptor -> {
+                        final ProcessorNode processorNode = controllerFacade.createTemporaryProcessor(dto.getType());
+                        processorNode.getPropertyDescriptors().forEach(descriptor -> {
                             if (config.getProperties().get(descriptor.getName()) == null) {
                                 config.getProperties().put(descriptor.getName(), descriptor.getDefaultValue());
                             }
@@ -1797,12 +1758,10 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
     }
 
     @Override
-    public FlowEntity createTemplateInstance(final String groupId, final Double originX, final Double originY, final String templateEncodingVersion,
-                                             final FlowSnippetDTO requestSnippet, final String idGenerationSeed) {
-
+    public FlowEntity createTemplateInstance(final String groupId, final Double originX, final Double originY, final String templateId, final String idGenerationSeed) {
         // instantiate the template - there is no need to make another copy of the flow snippet since the actual template
         // was copied and this dto is only used to instantiate it's components (which as already completed)
-        final FlowSnippetDTO snippet = templateDAO.instantiateTemplate(groupId, originX, originY, templateEncodingVersion, requestSnippet, idGenerationSeed);
+        final FlowSnippetDTO snippet = templateDAO.instantiateTemplate(groupId, originX, originY, templateId, idGenerationSeed);
 
         // save the flow
         controllerFacade.save();
@@ -2174,8 +2133,8 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
     }
 
     @Override
-    public ProvenanceDTO getProvenance(final String queryId, final Boolean summarize, final Boolean incrementalResults) {
-        return controllerFacade.getProvenanceQuery(queryId, summarize, incrementalResults);
+    public ProvenanceDTO getProvenance(final String queryId) {
+        return controllerFacade.getProvenanceQuery(queryId);
     }
 
     @Override
@@ -2390,19 +2349,18 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
     }
 
     @Override
-    public Set<DocumentedTypeDTO> getProcessorTypes(final String bundleGroup, final String bundleArtifact, final String type) {
-        return controllerFacade.getFlowFileProcessorTypes(bundleGroup, bundleArtifact, type);
+    public Set<DocumentedTypeDTO> getProcessorTypes() {
+        return controllerFacade.getFlowFileProcessorTypes();
     }
 
     @Override
-    public Set<DocumentedTypeDTO> getControllerServiceTypes(final String serviceType, final String serviceBundleGroup, final String serviceBundleArtifact, final String serviceBundleVersion,
-                                                            final String bundleGroup, final String bundleArtifact, final String type) {
-        return controllerFacade.getControllerServiceTypes(serviceType, serviceBundleGroup, serviceBundleArtifact, serviceBundleVersion, bundleGroup, bundleArtifact, type);
+    public Set<DocumentedTypeDTO> getControllerServiceTypes(final String serviceType) {
+        return controllerFacade.getControllerServiceTypes(serviceType);
     }
 
     @Override
-    public Set<DocumentedTypeDTO> getReportingTaskTypes(final String bundleGroup, final String bundleArtifact, final String type) {
-        return controllerFacade.getReportingTaskTypes(bundleGroup, bundleArtifact, type);
+    public Set<DocumentedTypeDTO> getReportingTaskTypes() {
+        return controllerFacade.getReportingTaskTypes();
     }
 
     @Override
@@ -2556,7 +2514,6 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                 .accessAttempt(false)
                 .action(RequestAction.WRITE)
                 .userContext(userContext)
-                .explanationSupplier(() -> "Unable to retrieve port details.")
                 .build();
 
         final AuthorizationResult result = authorizer.authorize(request);
@@ -2722,11 +2679,6 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                         @Override
                         public String getName() {
                             return resource;
-                        }
-
-                        @Override
-                        public String getSafeDescription() {
-                            return "Policy " + resource;
                         }
                     };
                 }
@@ -3148,11 +3100,11 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
         return entityFactory.createStatusHistoryEntity(dto, permissions);
     }
 
-    private AuthorizationResult authorizeAction(final Action action) {
+    private boolean authorizeAction(final Action action) {
         final String sourceId = action.getSourceId();
         final Component type = action.getSourceType();
 
-        Authorizable authorizable;
+        final Authorizable authorizable;
         try {
             switch (type) {
                 case Processor:
@@ -3196,12 +3148,13 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
                     throw new WebApplicationException(Response.serverError().entity("An unexpected type of component is the source of this action.").build());
             }
         } catch (final ResourceNotFoundException e) {
-            // if the underlying component is gone, use the controller to see if permissions should be allowed
-            authorizable = controllerFacade;
+            // if the underlying component is gone, disallow
+            return false;
         }
 
         // perform the authorization
-        return authorizable.checkAuthorization(authorizer, RequestAction.READ, NiFiUserUtils.getNiFiUser());
+        final AuthorizationResult result = authorizable.checkAuthorization(authorizer, RequestAction.READ, NiFiUserUtils.getNiFiUser());
+        return Result.Approved.equals(result.getResult());
     }
 
     @Override
@@ -3225,8 +3178,7 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
         if (history.getActions() != null) {
             final List<ActionEntity> actionEntities = new ArrayList<>();
             for (final Action action : history.getActions()) {
-                final AuthorizationResult result = authorizeAction(action);
-                actionEntities.add(entityFactory.createActionEntity(dtoFactory.createActionDto(action), Result.Approved.equals(result.getResult())));
+                actionEntities.add(entityFactory.createActionEntity(dtoFactory.createActionDto(action), authorizeAction(action)));
             }
             historyDto.setActions(actionEntities);
         }
@@ -3245,10 +3197,9 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
             throw new ResourceNotFoundException(String.format("Unable to find action with id '%s'.", actionId));
         }
 
-        final AuthorizationResult result = authorizeAction(action);
-        final boolean authorized = Result.Approved.equals(result.getResult());
+        final boolean authorized = authorizeAction(action);
         if (!authorized) {
-            throw new AccessDeniedException(result.getExplanation());
+            throw new AccessDeniedException("Access is denied.");
         }
 
         // return the action
@@ -3360,11 +3311,6 @@ public class StandardNiFiServiceFacade implements NiFiServiceFacade {
         final NodeIdentifier nodeIdentifier = clusterCoordinator.getNodeIdentifier(nodeId);
         if (nodeIdentifier == null) {
             throw new UnknownNodeException("Cannot remove Node with ID " + nodeId + " because it is not part of the cluster");
-        }
-
-        final NodeConnectionStatus nodeConnectionStatus = clusterCoordinator.getConnectionStatus(nodeIdentifier);
-        if (!nodeConnectionStatus.getState().equals(NodeConnectionState.DISCONNECTED)) {
-            throw new IllegalNodeDeletionException("Cannot remove Node with ID " + nodeId + " because it is not disconnected, current state = " + nodeConnectionStatus.getState());
         }
 
         clusterCoordinator.removeNode(nodeIdentifier, userDn);

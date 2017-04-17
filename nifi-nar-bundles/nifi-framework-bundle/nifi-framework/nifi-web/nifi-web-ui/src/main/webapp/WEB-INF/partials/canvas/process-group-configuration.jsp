@@ -28,7 +28,6 @@
                 <div id="general-process-group-configuration">
                     <div class="setting">
                         <div class="setting-name">Process group name</div>
-                        <span id="process-group-id" class="hidden"></span>
                         <div class="editable setting-field">
                             <input type="text" id="process-group-name" class="setting-input"/>
                         </div>
@@ -62,7 +61,5 @@
             Last updated:&nbsp;<span id="process-group-configuration-last-refreshed" class="last-refreshed"></span>
         </div>
         <div id="process-group-configuration-loading-container" class="loading-container"></div>
-        <div id="flow-cs-availability" class="hidden">Listed services are available to all descendant Processors and services of this Process Group.</div>
-        <div class="clear"></div>
     </div>
 </div>

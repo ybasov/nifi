@@ -25,7 +25,6 @@ import org.apache.lucene.index.Term;
 import org.apache.nifi.provenance.IndexConfiguration;
 import org.apache.nifi.provenance.PersistentProvenanceRepository;
 import org.apache.nifi.provenance.expiration.ExpirationAction;
-import org.apache.nifi.provenance.index.EventIndexWriter;
 import org.apache.nifi.provenance.serialization.RecordReader;
 import org.apache.nifi.provenance.serialization.RecordReaders;
 import org.slf4j.Logger;
@@ -61,16 +60,15 @@ public class DeleteIndexAction implements ExpirationAction {
             final Term term = new Term(FieldNames.STORAGE_FILENAME, LuceneUtil.substringBefore(expiredFile.getName(), "."));
 
             boolean deleteDir = false;
-            final EventIndexWriter writer = indexManager.borrowIndexWriter(indexingDirectory);
+            final IndexWriter writer = indexManager.borrowIndexWriter(indexingDirectory);
             try {
-                final IndexWriter indexWriter = writer.getIndexWriter();
-                indexWriter.deleteDocuments(term);
-                indexWriter.commit();
-                final int docsLeft = indexWriter.numDocs();
+                writer.deleteDocuments(term);
+                writer.commit();
+                final int docsLeft = writer.numDocs();
                 deleteDir = docsLeft <= 0;
                 logger.debug("After expiring {}, there are {} docs left for index {}", expiredFile, docsLeft, indexingDirectory);
             } finally {
-                indexManager.returnIndexWriter(writer);
+                indexManager.returnIndexWriter(indexingDirectory, writer);
             }
 
             // we've confirmed that all documents have been removed. Delete the index directory.

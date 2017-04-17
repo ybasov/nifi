@@ -38,7 +38,6 @@ import org.apache.nifi.processors.lumberjack.frame.LumberjackFrameException;
 /**
  * Extends the StandardSocketChannelHandler to decode bytes into Lumberjack frames.
  */
-@Deprecated
 public class LumberjackSocketChannelHandler<E extends Event<SocketChannel>> extends StandardSocketChannelHandler<E> {
 
     private LumberjackDecoder decoder;

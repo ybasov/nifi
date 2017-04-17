@@ -22,7 +22,6 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
 import java.lang.management.OperatingSystemMXBean;
-import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadMXBean;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -53,7 +52,6 @@ public class SystemDiagnosticsFactory {
         final OperatingSystemMXBean os = ManagementFactory.getOperatingSystemMXBean();
         final ThreadMXBean threads = ManagementFactory.getThreadMXBean();
         final List<GarbageCollectorMXBean> garbageCollectors = ManagementFactory.getGarbageCollectorMXBeans();
-        final RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
 
         systemDiagnostics.setDaemonThreads(threads.getDaemonThreadCount());
         systemDiagnostics.setTotalThreads(threads.getThreadCount());
@@ -65,8 +63,6 @@ public class SystemDiagnosticsFactory {
         systemDiagnostics.setTotalNonHeap(nonHeap.getCommitted());
         systemDiagnostics.setUsedNonHeap(nonHeap.getUsed());
         systemDiagnostics.setMaxNonHeap(nonHeap.getMax());
-
-        systemDiagnostics.setUptime(runtime.getUptime());
 
         systemDiagnostics.setAvailableProcessors(os.getAvailableProcessors());
 

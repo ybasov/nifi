@@ -18,7 +18,6 @@ package org.apache.nifi.provenance.lineage;
 
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -56,6 +55,4 @@ public interface ComputeLineageResult {
      * @return Indicates whether or not the lineage has finished running
      */
     boolean isFinished();
-
-    boolean awaitCompletion(long time, TimeUnit unit) throws InterruptedException;
 }

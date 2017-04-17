@@ -104,7 +104,8 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
             .description("The type of this document (used by Elasticsearch for indexing and searching)")
             .required(true)
             .expressionLanguageSupported(true)
-            .addValidator(StandardValidators.NON_EMPTY_EL_VALIDATOR)
+            .addValidator(StandardValidators.createAttributeExpressionLanguageValidator(
+                    AttributeExpression.ResultType.STRING, true))
             .build();
 
     public static final PropertyDescriptor INDEX_OP = new PropertyDescriptor.Builder()
@@ -113,7 +114,8 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
             .description("The type of the operation used to index (index, update, upsert, delete)")
             .required(true)
             .expressionLanguageSupported(true)
-            .addValidator(StandardValidators.NON_EMPTY_EL_VALIDATOR)
+            .addValidator(StandardValidators.createAttributeExpressionLanguageValidator(
+                    AttributeExpression.ResultType.STRING, true))
             .defaultValue("index")
             .build();
 
@@ -126,19 +128,19 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
             .required(true)
             .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR)
             .defaultValue("100")
-            .expressionLanguageSupported(true)
             .build();
 
-    private static final Set<Relationship> relationships;
-    private static final List<PropertyDescriptor> propertyDescriptors;
+    @Override
+    public Set<Relationship> getRelationships() {
+        final Set<Relationship> relationships = new HashSet<>();
+        relationships.add(REL_SUCCESS);
+        relationships.add(REL_FAILURE);
+        relationships.add(REL_RETRY);
+        return Collections.unmodifiableSet(relationships);
+    }
 
-    static {
-        final Set<Relationship> _rels = new HashSet<>();
-        _rels.add(REL_SUCCESS);
-        _rels.add(REL_FAILURE);
-        _rels.add(REL_RETRY);
-        relationships = Collections.unmodifiableSet(_rels);
-
+    @Override
+    public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
         final List<PropertyDescriptor> descriptors = new ArrayList<>();
         descriptors.add(ES_URL);
         descriptors.add(PROP_SSL_CONTEXT_SERVICE);
@@ -152,18 +154,7 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
         descriptors.add(CHARSET);
         descriptors.add(BATCH_SIZE);
         descriptors.add(INDEX_OP);
-
-        propertyDescriptors = Collections.unmodifiableList(descriptors);
-    }
-
-    @Override
-    public Set<Relationship> getRelationships() {
-        return relationships;
-    }
-
-    @Override
-    public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
-        return propertyDescriptors;
+        return Collections.unmodifiableList(descriptors);
     }
 
     @Override
@@ -201,7 +192,7 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
 
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
-        final int batchSize = context.getProperty(BATCH_SIZE).evaluateAttributeExpressions().asInteger();
+        final int batchSize = context.getProperty(BATCH_SIZE).asInteger();
 
         final List<FlowFile> flowFiles = session.get(batchSize);
         if (flowFiles.isEmpty()) {
@@ -209,10 +200,10 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
         }
 
         final String id_attribute = context.getProperty(ID_ATTRIBUTE).getValue();
-
+        final Charset charset = Charset.forName(context.getProperty(CHARSET).getValue());
         // Authentication
-        final String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
-        final String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
+        final String username = context.getProperty(USERNAME).getValue();
+        final String password = context.getProperty(PASSWORD).getValue();
 
 
         OkHttpClient okHttpClient = getClient();
@@ -222,7 +213,7 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
         List<FlowFile> flowFilesToTransfer = new LinkedList<>(flowFiles);
 
         final StringBuilder sb = new StringBuilder();
-        final String baseUrl = trimToEmpty(context.getProperty(ES_URL).evaluateAttributeExpressions().getValue());
+        final String baseUrl = trimToEmpty(context.getProperty(ES_URL).getValue());
         final URL url;
         try {
             url = new URL((baseUrl.endsWith("/") ? baseUrl : baseUrl + "/") + "_bulk");
@@ -234,7 +225,6 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
 
         for (FlowFile file : flowFiles) {
             final String index = context.getProperty(INDEX).evaluateAttributeExpressions(file).getValue();
-            final Charset charset = Charset.forName(context.getProperty(CHARSET).evaluateAttributeExpressions(file).getValue());
             if (StringUtils.isEmpty(index)) {
                 logger.error("No value for index in for {}, transferring to failure", new Object[]{id_attribute, file});
                 flowFilesToTransfer.remove(file);
@@ -385,7 +375,6 @@ public class PutElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
                 logger.warn("Elasticsearch returned code {} with message {}, transferring flow file to failure", new Object[]{statusCode, getResponse.message()});
                 session.transfer(flowFilesToTransfer, REL_FAILURE);
             }
-            getResponse.close();
         }
     }
 }

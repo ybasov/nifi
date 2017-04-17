@@ -16,20 +16,17 @@
  */
 package org.apache.nifi.web;
 
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Aspect to limit access into the core.
  */
 @Aspect
 public class NiFiServiceFacadeLock {
-    private static final Logger logger = LoggerFactory.getLogger(NiFiServiceFacadeLock.class);
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final ReentrantReadWriteLock.ReadLock readLock = lock.readLock();
@@ -39,128 +36,165 @@ public class NiFiServiceFacadeLock {
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* create*(..))")
     public Object createLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
         + "execution(* clear*(..))")
     public Object clearLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* delete*(..))")
     public Object deleteLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* remove*(..))")
     public Object removeLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* update*(..))")
     public Object updateLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* set*(..))")
     public Object setLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* copy*(..))")
     public Object copyLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* import*(..))")
     public Object importLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* export*(..))")
     public Object exportLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* submit*(..))")
     public Object submitLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* schedule*(..))")
     public Object scheduleLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithWriteLock(proceedingJoinPoint);
+        writeLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* get*(..))")
     public Object getLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithReadLock(proceedingJoinPoint);
+        readLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* is*(..))")
     public Object isLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithReadLock(proceedingJoinPoint);
+        readLock.lock();
+        try {
+            return proceedingJoinPoint.proceed();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
             + "execution(* search*(..))")
     public Object searchLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithReadLock(proceedingJoinPoint);
-    }
-
-    @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
-        + "execution(* verify*(..))")
-    public Object verifyLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        return proceedWithReadLock(proceedingJoinPoint);
-    }
-
-
-    private Object proceedWithReadLock(final ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        final long beforeLock = System.nanoTime();
-        long afterLock = 0L;
-
         readLock.lock();
         try {
-            afterLock = System.nanoTime();
             return proceedingJoinPoint.proceed();
         } finally {
             readLock.unlock();
-
-            final long afterProcedure = System.nanoTime();
-            final String procedure = proceedingJoinPoint.getSignature().toLongString();
-            logger.debug("In order to perform procedure {}, it took {} nanos to obtain the Read Lock {} and {} nanos to invoke the method",
-                procedure, afterLock - beforeLock, readLock, afterProcedure - afterLock);
         }
     }
 
-    private Object proceedWithWriteLock(final ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
-        final long beforeLock = System.nanoTime();
-        long afterLock = 0L;
-
-        writeLock.lock();
+    @Around("within(org.apache.nifi.web.NiFiServiceFacade+) && "
+            + "execution(* verify*(..))")
+    public Object verifyLock(ProceedingJoinPoint proceedingJoinPoint) throws Throwable {
+        readLock.lock();
         try {
-            afterLock = System.nanoTime();
             return proceedingJoinPoint.proceed();
         } finally {
-            writeLock.unlock();
-
-            final long afterProcedure = System.nanoTime();
-            final String procedure = proceedingJoinPoint.getSignature().toLongString();
-            logger.debug("In order to perform procedure {}, it took {} nanos to obtain the Write Lock {} and {} nanos to invoke the method",
-                procedure, afterLock - beforeLock, writeLock, afterProcedure - afterLock);
+            readLock.unlock();
         }
     }
-
 }

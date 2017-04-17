@@ -26,17 +26,12 @@ import org.apache.commons.cli.OptionGroup;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.nifi.toolkit.zkmigrator.ZooKeeperMigrator.AuthMode;
-import org.apache.zookeeper.KeeperException;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
-import java.util.concurrent.ExecutionException;
 
 public class ZooKeeperMigratorMain {
 
@@ -119,7 +114,7 @@ public class ZooKeeperMigratorMain {
         helpFormatter.printHelp(ZooKeeperMigratorMain.class.getCanonicalName(), HEADER, options, FOOTER, true);
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         PrintStream output = System.out;
         System.setOut(System.err);
 
@@ -152,19 +147,15 @@ public class ZooKeeperMigratorMain {
                 }
                 final ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri);
                 if (mode.equals(Mode.READ)) {
-                    try (OutputStream zkData = filename != null ? new FileOutputStream(Paths.get(filename).toFile()) : output) {
-                        zookeeperMigrator.readZooKeeper(zkData, authMode, authData);
-                    }
+                    zookeeperMigrator.readZooKeeper(filename != null ? new FileOutputStream(Paths.get(filename).toFile()) : output, authMode, authData);
                 } else {
-                    try (InputStream zkData = filename != null ? new FileInputStream(Paths.get(filename).toFile()) : System.in) {
-                        zookeeperMigrator.writeZooKeeper(zkData, authMode, authData, ignoreSource);
-                    }
+                    zookeeperMigrator.writeZooKeeper(filename != null ? new FileInputStream(Paths.get(filename).toFile()) : System.in, authMode, authData, ignoreSource);
                 }
             }
         } catch (ParseException e) {
             printUsage(e.getLocalizedMessage(), options);
-        } catch (IOException | KeeperException | InterruptedException | ExecutionException e) {
-            throw new IOException(String.format("unable to perform operation: %s", e.getLocalizedMessage()), e);
+        } catch (Exception e) {
+            throw new RuntimeException(String.format("unable to perform operation: %s", e.getLocalizedMessage()), e);
         }
     }
 }

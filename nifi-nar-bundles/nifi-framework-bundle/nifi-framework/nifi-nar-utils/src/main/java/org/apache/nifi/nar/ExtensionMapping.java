@@ -16,108 +16,58 @@
  */
 package org.apache.nifi.nar;
 
-import org.apache.nifi.bundle.BundleCoordinate;
-
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.BiFunction;
+import java.util.List;
 
 public class ExtensionMapping {
 
-    private final Map<String, Set<BundleCoordinate>> processorNames = new HashMap<>();
-    private final Map<String, Set<BundleCoordinate>> controllerServiceNames = new HashMap<>();
-    private final Map<String, Set<BundleCoordinate>> reportingTaskNames = new HashMap<>();
+    private final List<String> processorNames = new ArrayList<>();
+    private final List<String> controllerServiceNames = new ArrayList<>();
+    private final List<String> reportingTaskNames = new ArrayList<>();
 
-    private final BiFunction<Set<BundleCoordinate>, Set<BundleCoordinate>, Set<BundleCoordinate>> merger = (oldValue, newValue) -> {
-        final Set<BundleCoordinate> merged = new HashSet<>();
-        merged.addAll(oldValue);
-        merged.addAll(newValue);
-        return merged;
-    };
-
-    void addProcessor(final BundleCoordinate coordinate, final String processorName) {
-        processorNames.computeIfAbsent(processorName, name -> new HashSet<>()).add(coordinate);
+    void addProcessor(final String processorName) {
+        processorNames.add(processorName);
     }
 
-    void addAllProcessors(final BundleCoordinate coordinate, final Collection<String> processorNames) {
-        processorNames.forEach(name -> {
-            addProcessor(coordinate, name);
-        });
+    void addAllProcessors(final Collection<String> processorNames) {
+        this.processorNames.addAll(processorNames);
     }
 
-    void addControllerService(final BundleCoordinate coordinate, final String controllerServiceName) {
-        controllerServiceNames.computeIfAbsent(controllerServiceName, name -> new HashSet<>()).add(coordinate);
+    void addControllerService(final String controllerServiceName) {
+        controllerServiceNames.add(controllerServiceName);
     }
 
-    void addAllControllerServices(final BundleCoordinate coordinate, final Collection<String> controllerServiceNames) {
-        controllerServiceNames.forEach(name -> {
-            addControllerService(coordinate, name);
-        });
+    void addAllControllerServices(final Collection<String> controllerServiceNames) {
+        this.controllerServiceNames.addAll(controllerServiceNames);
     }
 
-    void addReportingTask(final BundleCoordinate coordinate, final String reportingTaskName) {
-        reportingTaskNames.computeIfAbsent(reportingTaskName, name -> new HashSet<>()).add(coordinate);
+    void addReportingTask(final String reportingTaskName) {
+        reportingTaskNames.add(reportingTaskName);
     }
 
-    void addAllReportingTasks(final BundleCoordinate coordinate, final Collection<String> reportingTaskNames) {
-        reportingTaskNames.forEach(name -> {
-            addReportingTask(coordinate, name);
-        });
+    void addAllReportingTasks(final Collection<String> reportingTaskNames) {
+        this.reportingTaskNames.addAll(reportingTaskNames);
     }
 
-    void merge(final ExtensionMapping other) {
-        other.getProcessorNames().forEach((name, otherCoordinates) -> {
-            processorNames.merge(name, otherCoordinates, merger);
-        });
-        other.getControllerServiceNames().forEach((name, otherCoordinates) -> {
-            controllerServiceNames.merge(name, otherCoordinates, merger);
-        });
-        other.getReportingTaskNames().forEach((name, otherCoordinates) -> {
-            reportingTaskNames.merge(name, otherCoordinates, merger);
-        });
+    public List<String> getProcessorNames() {
+        return Collections.unmodifiableList(processorNames);
     }
 
-    public Map<String, Set<BundleCoordinate>> getProcessorNames() {
-        return Collections.unmodifiableMap(processorNames);
+    public List<String> getControllerServiceNames() {
+        return Collections.unmodifiableList(controllerServiceNames);
     }
 
-    public Map<String, Set<BundleCoordinate>> getControllerServiceNames() {
-        return Collections.unmodifiableMap(controllerServiceNames);
+    public List<String> getReportingTaskNames() {
+        return Collections.unmodifiableList(reportingTaskNames);
     }
 
-    public Map<String, Set<BundleCoordinate>> getReportingTaskNames() {
-        return Collections.unmodifiableMap(reportingTaskNames);
-    }
-
-    public Map<String, Set<BundleCoordinate>> getAllExtensionNames() {
-        final Map<String, Set<BundleCoordinate>> extensionNames = new HashMap<>();
-        extensionNames.putAll(processorNames);
-        extensionNames.putAll(controllerServiceNames);
-        extensionNames.putAll(reportingTaskNames);
+    public List<String> getAllExtensionNames() {
+        final List<String> extensionNames = new ArrayList<>();
+        extensionNames.addAll(processorNames);
+        extensionNames.addAll(controllerServiceNames);
+        extensionNames.addAll(reportingTaskNames);
         return extensionNames;
-    }
-
-    public int size() {
-        int size = 0;
-
-        for (final Set<BundleCoordinate> coordinates : processorNames.values()) {
-            size += coordinates.size();
-        }
-        for (final Set<BundleCoordinate> coordinates : controllerServiceNames.values()) {
-            size += coordinates.size();
-        }
-        for (final Set<BundleCoordinate> coordinates : reportingTaskNames.values()) {
-            size += coordinates.size();
-        }
-
-        return size;
-    }
-
-    public boolean isEmpty() {
-        return processorNames.isEmpty() && controllerServiceNames.isEmpty() && reportingTaskNames.isEmpty();
     }
 }

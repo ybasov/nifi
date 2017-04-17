@@ -237,7 +237,7 @@ class ProtectedNiFiPropertiesGroovyTest extends GroovyTestCase {
     @Test
     public void testShouldGetAdditionalSensitiveProperties() throws Exception {
         // Arrange
-        def completeSensitiveProperties = DEFAULT_SENSITIVE_PROPERTIES + ["nifi.ui.banner.text"]
+        def completeSensitiveProperties = DEFAULT_SENSITIVE_PROPERTIES + ["nifi.ui.banner.text", "nifi.version"]
         logger.expected("${completeSensitiveProperties.size()} total sensitive properties: ${completeSensitiveProperties.join(", ")}")
 
         ProtectedNiFiProperties properties = loadFromFile("/conf/nifi_with_additional_sensitive_keys.properties")

@@ -16,23 +16,39 @@
  */
 package org.apache.nifi.stream.io.util;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+
+import org.apache.nifi.stream.io.exception.TokenTooLargeException;
 
 /**
  * The <code>StreamDemarcator</code> class takes an input stream and demarcates
  * it so it could be read (see {@link #nextToken()}) as individual byte[]
- * demarcated by the provided delimiter (see 'delimiterBytes'). If delimiter is
- * not provided the entire stream will be read into a single token which may
- * result in {@link OutOfMemoryError} if stream is too large. The 'maxDataSize'
- * controls the maximum size of the buffer that accumulates a token.
- * <p>
- * NOTE: Not intended for multi-thread usage hence not Thread-safe.
- * </p>
+ * demarcated by the provided delimiter. If delimiter is not provided the entire
+ * stream will be read into a single token which may result in
+ * {@link OutOfMemoryError} if stream is too large.
  */
-public class StreamDemarcator extends AbstractDemarcator {
+public class StreamDemarcator implements Closeable {
+
+    private final static int INIT_BUFFER_SIZE = 8192;
+
+    private final InputStream is;
 
     private final byte[] delimiterBytes;
+
+    private final int maxDataSize;
+
+    private final int initialBufferSize;
+
+
+    private byte[] buffer;
+
+    private int index;
+
+    private int mark;
+
+    private int readAheadLength;
 
     /**
      * Constructs a new instance
@@ -41,14 +57,10 @@ public class StreamDemarcator extends AbstractDemarcator {
      *            instance of {@link InputStream} representing the data
      * @param delimiterBytes
      *            byte array representing delimiter bytes used to split the
-     *            input stream. Can be 'null'. NOTE: the 'null' is allowed only
-     *            for convenience and consistency since without delimiter this
-     *            class is no different then BufferedReader which reads the
-     *            entire stream into a byte array and there may be a more
-     *            efficient ways to do that (if that is the case).
+     *            input stream. Can be null
      * @param maxDataSize
      *            maximum size of data derived from the input stream. This means
-     *            that neither {@link InputStream} nor its individual tokens (if
+     *            that neither {@link InputStream} nor its individual chunks (if
      *            delimiter is used) can ever be greater then this size.
      */
     public StreamDemarcator(InputStream is, byte[] delimiterBytes, int maxDataSize) {
@@ -62,14 +74,10 @@ public class StreamDemarcator extends AbstractDemarcator {
      *            instance of {@link InputStream} representing the data
      * @param delimiterBytes
      *            byte array representing delimiter bytes used to split the
-     *            input stream. Can be 'null'. NOTE: the 'null' is allowed only
-     *            for convenience and consistency since without delimiter this
-     *            class is no different then BufferedReader which reads the
-     *            entire stream into a byte array and there may be a more
-     *            efficient ways to do that (if that is the case).
+     *            input stream. Can be null
      * @param maxDataSize
      *            maximum size of data derived from the input stream. This means
-     *            that neither {@link InputStream} nor its individual tokens (if
+     *            that neither {@link InputStream} nor its individual chunks (if
      *            delimiter is used) can ever be greater then this size.
      * @param initialBufferSize
      *            initial size of the buffer used to buffer {@link InputStream}
@@ -79,9 +87,12 @@ public class StreamDemarcator extends AbstractDemarcator {
      *
      */
     public StreamDemarcator(InputStream is, byte[] delimiterBytes, int maxDataSize, int initialBufferSize) {
-        super(is, maxDataSize, initialBufferSize);
-        this.validate(delimiterBytes);
+        this.validateInput(is, delimiterBytes, maxDataSize, initialBufferSize);
+        this.is = is;
         this.delimiterBytes = delimiterBytes;
+        this.initialBufferSize = initialBufferSize;
+        this.buffer = new byte[initialBufferSize];
+        this.maxDataSize = maxDataSize;
     }
 
     /**
@@ -91,55 +102,99 @@ public class StreamDemarcator extends AbstractDemarcator {
      * @throws IOException if unable to read from the stream
      */
     public byte[] nextToken() throws IOException {
-        byte[] token = null;
+        byte[] data = null;
         int j = 0;
-        nextTokenLoop:
-        while (token == null && this.availableBytesLength != -1) {
-            if (this.index >= this.availableBytesLength) {
+
+        while (data == null && this.buffer != null) {
+            if (this.index >= this.readAheadLength) {
                 this.fill();
             }
-            if (this.availableBytesLength != -1) {
-                byte byteVal;
-                int i;
-                for (i = this.index; i < this.availableBytesLength; i++) {
-                    byteVal = this.buffer[i];
-
-                    boolean delimiterFound = false;
-                    if (this.delimiterBytes != null && this.delimiterBytes[j] == byteVal) {
-                        if (++j == this.delimiterBytes.length) {
-                            delimiterFound = true;
-                        }
-                    } else {
-                        j = 0;
-                    }
-
-                    if (delimiterFound) {
-                        this.index = i + 1;
-                        int size = this.index - this.mark - this.delimiterBytes.length;
-                        token = this.extractDataToken(size);
+            if (this.index >= this.readAheadLength) {
+                data = this.extractDataToken(0);
+                this.buffer = null;
+            } else {
+                byte byteVal = this.buffer[this.index++];
+                if (this.delimiterBytes != null && this.delimiterBytes[j] == byteVal) {
+                    if (++j == this.delimiterBytes.length) {
+                        data = this.extractDataToken(this.delimiterBytes.length);
                         this.mark = this.index;
                         j = 0;
-                        if (token != null) {
-                            break nextTokenLoop;
-                        }
                     }
+                } else {
+                    j = 0;
                 }
-                this.index = i;
-            } else {
-                token = this.extractDataToken(this.index - this.mark);
+            }
+        }
+        return data;
+    }
+
+    /**
+     * Will fill the current buffer from current 'index' position, expanding it
+     * and or shuffling it if necessary
+     *
+     * @throws IOException if unable to read from the stream
+     */
+    private void fill() throws IOException {
+        if (this.index >= this.buffer.length) {
+            if (this.mark == 0) { // expand
+                byte[] newBuff = new byte[this.buffer.length + this.initialBufferSize];
+                System.arraycopy(this.buffer, 0, newBuff, 0, this.buffer.length);
+                this.buffer = newBuff;
+            } else { // shuffle
+                int length = this.index - this.mark;
+                System.arraycopy(this.buffer, this.mark, this.buffer, 0, length);
+                this.index = length;
+                this.mark = 0;
+                this.readAheadLength = length;
             }
         }
 
-        return token;
+        int bytesRead;
+        do {
+            bytesRead = this.is.read(this.buffer, this.index, this.buffer.length - this.index);
+        } while (bytesRead == 0);
+
+        if (bytesRead != -1) {
+            this.readAheadLength = this.index + bytesRead;
+            if (this.readAheadLength > this.maxDataSize) {
+                throw new TokenTooLargeException("A message in the stream exceeds the maximum allowed message size of " + this.maxDataSize + " bytes.");
+            }
+        }
     }
 
+    /**
+     * Will extract data token from the current buffer. The length of the data
+     * token is between the current 'mark' and 'index' minus 'lengthSubtract'
+     * which signifies the length of the delimiter (if any). If the above
+     * subtraction results in length 0, null is returned.
+     */
+    private byte[] extractDataToken(int lengthSubtract) {
+        byte[] data = null;
+        int length = this.index - this.mark - lengthSubtract;
+        if (length > 0) {
+            data = new byte[length];
+            System.arraycopy(this.buffer, this.mark, data, 0, data.length);
+        }
+        return data;
+    }
 
     /**
-     * Validates prerequisites for constructor arguments
+     *
      */
-    private void validate(byte[] delimiterBytes) {
-        if (delimiterBytes != null && delimiterBytes.length == 0) {
+    private void validateInput(InputStream is, byte[] delimiterBytes, int maxDataSize, int initialBufferSize) {
+        if (is == null) {
+            throw new IllegalArgumentException("'is' must not be null");
+        } else if (maxDataSize <= 0) {
+            throw new IllegalArgumentException("'maxDataSize' must be > 0");
+        } else if (initialBufferSize <= 0) {
+            throw new IllegalArgumentException("'initialBufferSize' must be > 0");
+        } else if (delimiterBytes != null && delimiterBytes.length == 0){
             throw new IllegalArgumentException("'delimiterBytes' is an optional argument, but when provided its length must be > 0");
         }
+    }
+
+    @Override
+    public void close() throws IOException {
+        is.close();
     }
 }

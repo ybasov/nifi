@@ -38,7 +38,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import javax.servlet.AsyncContext;
-import javax.servlet.DispatcherType;
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -513,9 +512,8 @@ public class HandleHttpRequest extends AbstractProcessor {
             putAttribute(attributes, "http.method", request.getMethod());
             putAttribute(attributes, "http.local.addr", request.getLocalAddr());
             putAttribute(attributes, HTTPUtils.HTTP_LOCAL_NAME, request.getLocalName());
-            final String queryString = request.getQueryString();
-            if (queryString != null) {
-                putAttribute(attributes, "http.query.string", URLDecoder.decode(queryString, charset));
+            if (request.getQueryString() != null) {
+                putAttribute(attributes, "http.query.string", URLDecoder.decode(request.getQueryString(), charset));
             }
             putAttribute(attributes, HTTPUtils.HTTP_REMOTE_HOST, request.getRemoteHost());
             putAttribute(attributes, "http.remote.addr", request.getRemoteAddr());
@@ -525,9 +523,8 @@ public class HandleHttpRequest extends AbstractProcessor {
             putAttribute(attributes, "http.auth.type", request.getAuthType());
 
             putAttribute(attributes, "http.requested.session.id", request.getRequestedSessionId());
-            final DispatcherType dispatcherType = request.getDispatcherType();
-            if (dispatcherType != null) {
-                putAttribute(attributes, "http.dispatcher.type", dispatcherType.name());
+            if (request.getDispatcherType() != null) {
+                putAttribute(attributes, "http.dispatcher.type", request.getDispatcherType().name());
             }
             putAttribute(attributes, "http.character.encoding", request.getCharacterEncoding());
             putAttribute(attributes, "http.locale", request.getLocale());
@@ -555,6 +552,7 @@ public class HandleHttpRequest extends AbstractProcessor {
                 }
             }
 
+            final String queryString = request.getQueryString();
             if (queryString != null) {
                 final String[] params = URL_QUERY_PARAM_DELIMITER.split(queryString);
                 for (final String keyValueString : params) {

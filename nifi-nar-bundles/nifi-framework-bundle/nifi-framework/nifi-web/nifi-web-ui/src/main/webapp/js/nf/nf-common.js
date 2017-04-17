@@ -15,90 +15,66 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports, parseFloat */
+/* global nf, parseFloat */
 
-// Define a common utility class used across the entire application.
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'd3',
-                'nf.Storage'],
-            function ($, d3, nfStorage) {
-                return (nf.Common = factory($, d3, nfStorage));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.Common = factory(require('jquery'),
-            require('d3'),
-            require('nf.Storage')));
-    } else {
-        nf.Common = factory(root.$,
-            root.d3,
-            root.nf.Storage);
-    }
-}(this, function ($, d3, nfStorage) {
-    'use strict';
-
-    $(document).ready(function () {
-        // preload the image for the error page - this is preloaded because the system
-        // may be unavailable to return the image when the error page is rendered
-        var imgSrc = 'images/bg-error.png';
-        $('<img/>').attr('src', imgSrc).on('load', function () {
-            $('div.message-pane').css('background-image', imgSrc);
-        });
-
-        // mouse over for links
-        $(document).on('mouseenter', 'span.link', function () {
-            $(this).addClass('link-over');
-        }).on('mouseleave', 'span.link', function () {
-            $(this).removeClass('link-over');
-        });
-
-        // setup custom checkbox
-        $(document).on('click', 'div.nf-checkbox', function () {
-            var checkbox = $(this);
-            if (checkbox.hasClass('checkbox-unchecked')) {
-                checkbox.removeClass('checkbox-unchecked').addClass('checkbox-checked');
-            } else {
-                checkbox.removeClass('checkbox-checked').addClass('checkbox-unchecked');
-            }
-        });
-
-        // setup click areas for custom checkboxes
-        $(document).on('click', '.nf-checkbox-label', function (e) {
-            $(e.target).parent().find('.nf-checkbox').click();
-        });
-
-        // show the loading icon when appropriate
-        $(document).ajaxStart(function () {
-            // show the loading indicator
-            $('div.loading-container').addClass('ajax-loading');
-        }).ajaxStop(function () {
-            // hide the loading indicator
-            $('div.loading-container').removeClass('ajax-loading');
-        });
-
-        // shows the logout link in the message-pane when appropriate and schedule token refresh
-        if (nfStorage.getItem('jwt') !== null) {
-            $('#user-logout-container').css('display', 'block');
-            nfCommon.scheduleTokenRefresh();
-        }
-
-        // handle logout
-        $('#user-logout').on('click', function () {
-            nfStorage.removeItem('jwt');
-            window.location = '/nifi/login';
-        });
-
-        // handle home
-        $('#user-home').on('click', function () {
-            if (top !== window) {
-                parent.window.location = '/nifi';
-            } else {
-                window.location = '/nifi';
-            }
-        });
+$(document).ready(function () {
+    // preload the image for the error page - this is preloaded because the system
+    // may be unavailable to return the image when the error page is rendered
+    var imgSrc = 'images/bg-error.png';
+    $('<img/>').attr('src', imgSrc).on('load', function () {
+        $('div.message-pane').css('background-image', imgSrc);
     });
 
+    // mouse over for links
+    $(document).on('mouseenter', 'span.link', function () {
+        $(this).addClass('link-over');
+    }).on('mouseleave', 'span.link', function () {
+        $(this).removeClass('link-over');
+    });
+
+    // setup custom checkbox
+    $(document).on('click', 'div.nf-checkbox', function () {
+        var checkbox = $(this);
+        if (checkbox.hasClass('checkbox-unchecked')) {
+            checkbox.removeClass('checkbox-unchecked').addClass('checkbox-checked');
+        } else {
+            checkbox.removeClass('checkbox-checked').addClass('checkbox-unchecked');
+        }
+    });
+
+    // show the loading icon when appropriate
+    $(document).ajaxStart(function () {
+        // show the loading indicator 
+        $('div.loading-container').addClass('ajax-loading');
+    }).ajaxStop(function () {
+        // hide the loading indicator 
+        $('div.loading-container').removeClass('ajax-loading');
+    });
+    
+    // shows the logout link in the message-pane when appropriate and schedule token refresh
+    if (nf.Storage.getItem('jwt') !== null) {
+        $('#user-logout-container').css('display', 'block');
+        nf.Common.scheduleTokenRefresh();
+    }
+    
+    // handle logout
+    $('#user-logout').on('click', function () {
+        nf.Storage.removeItem('jwt');
+        window.location = '/nifi/login';
+    });
+    
+    // handle home
+    $('#user-home').on('click', function () {
+        if (top !== window) {
+            parent.window.location = '/nifi';
+        } else {
+            window.location = '/nifi';
+        }
+    });
+});
+
+// Define a common utility class used across the entire application.
+nf.Common = (function () {
     // interval for cancelling token refresh when necessary
     var tokenRefreshInterval = null;
 
@@ -144,7 +120,7 @@
         description: 'Allows users to view/modify Counters'
     }];
 
-    var nfCommon = {
+    return {
         ANONYMOUS_USER_TEXT: 'Anonymous user',
 
         config: {
@@ -155,12 +131,12 @@
                 },
                 show: {
                     solo: true,
-                    effect: function (offset) {
+                    effect: function(offset) {
                         $(this).slideDown(100);
                     }
                 },
                 hide: {
-                    effect: function (offset) {
+                    effect: function(offset) {
                         $(this).slideUp(100);
                     }
                 },
@@ -185,124 +161,6 @@
         currentUser: undefined,
 
         /**
-         * Sorts the specified version strings.
-         *
-         * @param aRawVersion version string
-         * @param bRawVersion version string
-         * @returns {number} negative if a before b, positive if a after b, 0 otherwise
-         */
-        sortVersion: function (aRawVersion, bRawVersion) {
-            if (aRawVersion === bRawVersion) {
-                return 0;
-            }
-
-            // attempt to parse the raw strings
-            var aTokens = aRawVersion.split(/-/);
-            var bTokens = bRawVersion.split(/-/);
-
-            // ensure there is at least one token
-            if (aTokens.length >= 1 && bTokens.length >= 1) {
-                var aVersionTokens = aTokens[0].split(/\./);
-                var bVersionTokens = bTokens[0].split(/\./);
-
-                // ensure both versions have at least one token
-                if (aVersionTokens.length >= 1 && bVersionTokens.length >= 1) {
-                    // find the number of tokens a and b have in common
-                    var commonTokenLength = Math.min(aVersionTokens.length, bVersionTokens.length);
-
-                    // consider all tokens in common
-                    for (var i = 0; i < commonTokenLength; i++) {
-                        var aVersionSegment = parseInt(aVersionTokens[i], 10);
-                        var bVersionSegment = parseInt(bVersionTokens[i], 10);
-
-                        // if both are non numeric, consider the next token
-                        if (isNaN(aVersionSegment) && isNaN(bVersionSegment)) {
-                            continue;
-                        }  else if (isNaN(aVersionSegment)) {
-                            // NaN is considered less
-                            return -1;
-                        } else if (isNaN(bVersionSegment)) {
-                            // NaN is considered less
-                            return 1;
-                        }
-
-                        // if a version at any point does not match
-                        if (aVersionSegment !== bVersionSegment) {
-                            return aVersionSegment - bVersionSegment;
-                        }
-                    }
-
-                    if (aVersionTokens.length === bVersionTokens.length) {
-                        if (aTokens.length === bTokens.length) {
-                            // same version for all tokens so consider the trailing bits (1.1-RC vs 1.1-SNAPSHOT)
-                            var aExtraBits = nfCommon.substringAfterFirst(aRawVersion, aTokens[0]);
-                            var bExtraBits = nfCommon.substringAfterFirst(bRawVersion, bTokens[0]);
-                            return aExtraBits === bExtraBits ? 0 : aExtraBits > bExtraBits ? 1 : -1;
-                        } else {
-                            // in this case, extra bits means it's consider less than no extra bits (1.1 vs 1.1-SNAPSHOT)
-                            return bTokens.length - aTokens.length;
-                        }
-                    } else {
-                        // same version for all tokens in common (ie 1.1 vs 1.1.1)
-                        return aVersionTokens.length - bVersionTokens.length;
-                    }
-                } else if (aVersionTokens.length >= 1) {
-                    // presence of version tokens is considered greater
-                    return 1;
-                } else if (bVersionTokens.length >= 1) {
-                    // presence of version tokens is considered greater
-                    return -1;
-                } else {
-                    return 0;
-                }
-            } else if (aTokens.length >= 1) {
-                // presence of tokens is considered greater
-                return 1;
-            } else if (bTokens.length >= 1) {
-                // presence of tokens is considered greater
-                return -1;
-            } else {
-                return 0;
-            }
-        },
-
-        /**
-         * Sorts the specified type data using the specified sort details.
-         *
-         * @param {object} sortDetails
-         * @param {object} data
-         */
-        sortType: function (sortDetails, data) {
-            // compares two bundles
-            var compareBundle = function (a, b) {
-                var aBundle = nfCommon.formatBundle(a.bundle);
-                var bBundle = nfCommon.formatBundle(b.bundle);
-                return aBundle === bBundle ? 0 : aBundle > bBundle ? 1 : -1;
-            };
-
-            // defines a function for sorting
-            var comparer = function (a, b) {
-                if (sortDetails.columnId === 'version') {
-                    var aVersion = nfCommon.isDefinedAndNotNull(a.bundle[sortDetails.columnId]) ? a.bundle[sortDetails.columnId] : '';
-                    var bVersion = nfCommon.isDefinedAndNotNull(b.bundle[sortDetails.columnId]) ? b.bundle[sortDetails.columnId] : '';
-                    var versionResult = nfCommon.sortVersion(aVersion, bVersion);
-                    return versionResult === 0 ? compareBundle(a, b) : versionResult;
-                } else if (sortDetails.columnId === 'type') {
-                    var aType = nfCommon.substringAfterLast(a[sortDetails.columnId], '.');
-                    var bType = nfCommon.substringAfterLast(b[sortDetails.columnId], '.');
-                    return aType === bType ? 0 : aType > bType ? 1 : -1;
-                } else {
-                    var aString = nfCommon.isDefinedAndNotNull(a[sortDetails.columnId]) ? a[sortDetails.columnId] : '';
-                    var bString = nfCommon.isDefinedAndNotNull(b[sortDetails.columnId]) ? b[sortDetails.columnId] : '';
-                    return aString === bString ? compareBundle(a, b) : aString > bString ? 1 : -1;
-                }
-            };
-
-            // perform the sort
-            data.sort(comparer, sortDetails.sortAsc);
-        },
-
-        /**
          * Formats type of a component for a new instance dialog.
          *
          * @param row
@@ -316,129 +174,25 @@
             var markup = '';
 
             // restriction
-            if (nfCommon.isBlank(dataContext.usageRestriction) === false) {
-                markup += '<div class="view-usage-restriction fa fa-shield"></div><span class="hidden row-id">' + nfCommon.escapeHtml(dataContext.id) + '</span>';
+            if (nf.Common.isBlank(dataContext.usageRestriction) === false) {
+                markup += '<div class="view-usage-restriction fa fa-shield"></div><span class="hidden row-id">' + nf.Common.escapeHtml(dataContext.id) + '</span>';
             } else {
                 markup += '<div class="fa"></div>';
             }
 
             // type
-            markup += nfCommon.escapeHtml(value);
+            markup += value;
 
             return markup;
-        },
-
-        /**
-         * Formats the bundle of a component type for the new instance dialog.
-         *
-         * @param row
-         * @param cell
-         * @param value
-         * @param columnDef
-         * @param dataContext
-         * @returns {string}
-         */
-        typeBundleFormatter: function (row, cell, value, columnDef, dataContext) {
-            return nfCommon.escapeHtml(nfCommon.formatBundle(dataContext.bundle));
-        },
-
-        /**
-         * Formats the bundle of a component type for the new instance dialog.
-         *
-         * @param row
-         * @param cell
-         * @param value
-         * @param columnDef
-         * @param dataContext
-         * @returns {string}
-         */
-        typeVersionFormatter: function (row, cell, value, columnDef, dataContext) {
-            var markup = '';
-
-            if (nfCommon.isDefinedAndNotNull(dataContext.bundle)) {
-                markup += ('<div style="float: left;">' + nfCommon.escapeHtml(dataContext.bundle.version) + '</div>');
-            } else {
-                markup += '<div style="float: left;">unversioned</div>';
-            }
-
-            if (!nfCommon.isEmpty(dataContext.controllerServiceApis)) {
-                markup += '<div class="controller-service-apis fa fa-list" title="Compatible Controller Service" style="margin-top: 2px; margin-left: 4px;"></div><span class="hidden row-id">' + nfCommon.escapeHtml(dataContext.id) + '</span>';
-            }
-
-            markup += '<div class="clear"></div>';
-
-            return markup;
-        },
-
-        /**
-         * Formatter for the type column.
-         *
-         * @param {type} row
-         * @param {type} cell
-         * @param {type} value
-         * @param {type} columnDef
-         * @param {type} dataContext
-         * @returns {String}
-         */
-        instanceTypeFormatter: function (row, cell, value, columnDef, dataContext) {
-            if (!dataContext.permissions.canRead) {
-                return '';
-            }
-
-            return nfCommon.escapeHtml(nfCommon.formatType(dataContext.component));
-        },
-
-        /**
-         * Formats the bundle of a component instance for the component listing table.
-         *
-         * @param row
-         * @param cell
-         * @param value
-         * @param columnDef
-         * @param dataContext
-         * @returns {string}
-         */
-        instanceBundleFormatter: function (row, cell, value, columnDef, dataContext) {
-            if (!dataContext.permissions.canRead) {
-                return '';
-            }
-
-            return nfCommon.typeBundleFormatter(row, cell, value, columnDef, dataContext.component);
-        },
-
-        /**
-         * Formats the type of this component.
-         *
-         * @param dataContext component datum
-         */
-        formatType: function (dataContext) {
-            var typeString = nfCommon.substringAfterLast(dataContext.type, '.');
-            if (dataContext.bundle.version !== 'unversioned') {
-                typeString += (' ' + dataContext.bundle.version);
-            }
-            return typeString;
-        },
-
-        /**
-         * Formats the bundle label.
-         *
-         * @param bundle
-         */
-        formatBundle: function (bundle) {
-            var groupString = '';
-            if (bundle.group !== 'default') {
-                groupString = bundle.group + ' - ';
-            }
-            return groupString + bundle.artifact;
         },
 
         /**
          * Sets the current user.
-         *
+         * 
          * @param currentUser
          */
         setCurrentUser: function (currentUser) {
-            nfCommon.currentUser = currentUser;
+            nf.Common.currentUser = currentUser;
         },
 
         /**
@@ -449,12 +203,12 @@
             if (tokenRefreshInterval !== null) {
                 clearInterval(tokenRefreshInterval);
             }
-
+            
             // set the interval to one hour
-            var interval = nfCommon.MILLIS_PER_MINUTE;
-
+            var interval = nf.Common.MILLIS_PER_MINUTE;
+            
             var checkExpiration = function () {
-                var expiration = nfStorage.getItemExpiration('jwt');
+                var expiration = nf.Storage.getItemExpiration('jwt');
 
                 // ensure there is an expiration and token present
                 if (expiration !== null) {
@@ -462,11 +216,11 @@
                     var now = new Date();
 
                     // get the time remainging plus a little bonus time to reload the token
-                    var timeRemaining = expirationDate.valueOf() - now.valueOf() - (30 * nfCommon.MILLIS_PER_SECOND);
+                    var timeRemaining = expirationDate.valueOf() - now.valueOf() - (30 * nf.Common.MILLIS_PER_SECOND);
                     if (timeRemaining < interval) {
-                        if ($('#current-user').text() !== nfCommon.ANONYMOUS_USER_TEXT && !$('#anonymous-user-alert').is(':visible')) {
+                        if ($('#current-user').text() !== nf.Common.ANONYMOUS_USER_TEXT && !$('#anonymous-user-alert').is(':visible')) {
                             // if the token will expire before the next interval minus some bonus time, notify the user to re-login
-                            $('#anonymous-user-alert').show().qtip($.extend({}, nfCommon.config.tooltipConfig, {
+                            $('#anonymous-user-alert').show().qtip($.extend({}, nf.Common.config.tooltipConfig, {
                                 content: 'Your session will expire soon. Please log in again to avoid being automatically logged out.',
                                 position: {
                                     my: 'top right',
@@ -477,10 +231,10 @@
                     }
                 }
             };
-
+            
             // perform initial check
             checkExpiration();
-
+            
             // schedule subsequent checks
             tokenRefreshInterval = setInterval(checkExpiration, interval);
         },
@@ -493,9 +247,9 @@
             if (anonymousUserAlert.data('qtip')) {
                 anonymousUserAlert.qtip('api').destroy(true);
             }
-
+                        
             // alert user's of anonymous access
-            anonymousUserAlert.show().qtip($.extend({}, nfCommon.config.tooltipConfig, {
+            anonymousUserAlert.show().qtip($.extend({}, nf.Common.config.tooltipConfig, {
                 content: 'You are accessing with limited authority. Log in or request an account to access with additional authority granted to you by an administrator.',
                 position: {
                     my: 'top right',
@@ -504,18 +258,18 @@
             }));
 
             // render the anonymous user text
-            $('#current-user').text(nfCommon.ANONYMOUS_USER_TEXT).show();
+            $('#current-user').text(nf.Common.ANONYMOUS_USER_TEXT).show();  
         },
 
         /**
          * Extracts the subject from the specified jwt. If the jwt is not as expected
          * an empty string is returned.
-         *
+         * 
          * @param {string} jwt
          * @returns {string}
          */
         getJwtPayload: function (jwt) {
-            if (nfCommon.isDefinedAndNotNull(jwt)) {
+            if (nf.Common.isDefinedAndNotNull(jwt)) {
                 var segments = jwt.split(/\./);
                 if (segments.length !== 3) {
                     return '';
@@ -524,7 +278,7 @@
                 var rawPayload = $.base64.atob(segments[1]);
                 var payload = JSON.parse(rawPayload);
 
-                if (nfCommon.isDefinedAndNotNull(payload)) {
+                if (nf.Common.isDefinedAndNotNull(payload)) {
                     return payload;
                 } else {
                     return null;
@@ -536,12 +290,12 @@
 
         /**
          * Determines whether the current user can access provenance.
-         *
+         * 
          * @returns {boolean}
          */
         canAccessProvenance: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.provenancePermissions.canRead === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.provenancePermissions.canRead === true;
             } else {
                 return false;
             }
@@ -553,8 +307,8 @@
          * @returns {boolean}
          */
         canAccessRestrictedComponents: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.restrictedComponentsPermissions.canWrite === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.restrictedComponentsPermissions.canWrite === true;
             } else {
                 return false;
             }
@@ -562,12 +316,12 @@
 
         /**
          * Determines whether the current user can access counters.
-         *
+         * 
          * @returns {boolean}
          */
         canAccessCounters: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.countersPermissions.canRead === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.countersPermissions.canRead === true;
             } else {
                 return false;
             }
@@ -575,12 +329,12 @@
 
         /**
          * Determines whether the current user can modify counters.
-         *
+         * 
          * @returns {boolean}
          */
         canModifyCounters: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.countersPermissions.canRead === true && nfCommon.currentUser.countersPermissions.canWrite === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.countersPermissions.canRead === true && nf.Common.currentUser.countersPermissions.canWrite === true;
             } else {
                 return false;
             }
@@ -592,8 +346,8 @@
          * @returns {boolean}
          */
         canAccessTenants: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.tenantsPermissions.canRead === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.tenantsPermissions.canRead === true;
             } else {
                 return false;
             }
@@ -605,8 +359,8 @@
          * @returns {boolean}
          */
         canModifyTenants: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.tenantsPermissions.canRead === true && nfCommon.currentUser.tenantsPermissions.canWrite === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.tenantsPermissions.canRead === true && nf.Common.currentUser.tenantsPermissions.canWrite === true;
             } else {
                 return false;
             }
@@ -618,8 +372,8 @@
          * @returns {boolean}
          */
         canAccessPolicies: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.policiesPermissions.canRead === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.policiesPermissions.canRead === true;
             } else {
                 return false;
             }
@@ -631,8 +385,8 @@
          * @returns {boolean}
          */
         canModifyPolicies: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.policiesPermissions.canRead === true && nfCommon.currentUser.policiesPermissions.canWrite === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.policiesPermissions.canRead === true && nf.Common.currentUser.policiesPermissions.canWrite === true;
             } else {
                 return false;
             }
@@ -644,8 +398,8 @@
          * @returns {boolean}
          */
         canAccessController: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.controllerPermissions.canRead === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.controllerPermissions.canRead === true;
             } else {
                 return false;
             }
@@ -657,8 +411,8 @@
          * @returns {boolean}
          */
         canModifyController: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.controllerPermissions.canRead === true && nfCommon.currentUser.controllerPermissions.canWrite === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.controllerPermissions.canRead === true && nf.Common.currentUser.controllerPermissions.canWrite === true;
             } else {
                 return false;
             }
@@ -670,8 +424,8 @@
          * @returns {boolean}
          */
         canAccessSystem: function () {
-            if (nfCommon.isDefinedAndNotNull(nfCommon.currentUser)) {
-                return nfCommon.currentUser.systemPermissions.canRead === true;
+            if (nf.Common.isDefinedAndNotNull(nf.Common.currentUser)) {
+                return nf.Common.currentUser.systemPermissions.canRead === true;
             } else {
                 return false;
             }
@@ -680,7 +434,7 @@
         /**
          * Adds a mouse over effect for the specified selector using
          * the specified styles.
-         *
+         * 
          * @argument {string} selector      The selector for the element to add a hover effect for
          * @argument {string} normalStyle   The css style for the normal state
          * @argument {string} overStyle     The css style for the over state
@@ -700,7 +454,7 @@
          * @param {HTMLElement} element The DOM element to toggle .scrollable upon.
          */
         toggleScrollable: function (element) {
-            if ($(element).is(':visible')) {
+            if ($(element).is(':visible')){
                 if (element.offsetHeight < element.scrollHeight ||
                     element.offsetWidth < element.scrollWidth) {
                     // your element has overflow
@@ -717,18 +471,150 @@
          * @param {string} hex  The hex color to test.
          * @returns {string} The contrasting color string.
          */
-        determineContrastColor: function (hex) {
-            if (parseInt(hex, 16) > 0xffffff / 1.5) {
+        determineContrastColor: function (hex){
+            if (parseInt(hex, 16) > 0xffffff/1.5) {
                 return '#000000';
             }
             return '#ffffff';
+        },
+
+
+        /**
+         * Method for handling ajax errors.
+         * 
+         * @argument {object} xhr       The XmlHttpRequest
+         * @argument {string} status    The status of the request
+         * @argument {string} error     The error
+         */
+        handleAjaxError: function (xhr, status, error) {
+            if (status === 'canceled') {
+                if ($('#splash').is(':visible')) {
+                    $('#message-title').text('Session Expired');
+                    $('#message-content').text('Your session has expired. Please reload to log in again.');
+
+                    // show the error pane
+                    $('#message-pane').show();
+                } else {
+                    nf.Dialog.showOkDialog({
+                        headerText: 'Session Expired',
+                        dialogContent: 'Your session has expired. Please press Ok to log in again.',
+                        okHandler: function () {
+                            window.location = '/nifi';
+                        }
+                    });
+                }
+                
+                // close the canvas
+                nf.Common.closeCanvas();
+                return;
+            }
+            
+            // if an error occurs while the splash screen is visible close the canvas show the error message
+            if ($('#splash').is(':visible')) {
+                if (xhr.status === 401) {
+                    $('#message-title').text('Unauthorized');
+                } else if (xhr.status === 403) {
+                    $('#message-title').text('Access Denied');
+                } else if (xhr.status === 409) {
+                    $('#message-title').text('Invalid State');
+                } else {
+                    $('#message-title').text('An unexpected error has occurred');
+                }
+
+                if ($.trim(xhr.responseText) === '') {
+                    $('#message-content').text('Please check the logs.');
+                } else {
+                    $('#message-content').text(xhr.responseText);
+                }
+
+                // show the error pane
+                $('#message-pane').show();
+
+                // close the canvas
+                nf.Common.closeCanvas();
+                return;
+            }
+
+            // status code 400, 403, 404, and 409 are expected response codes for common errors.
+            if (xhr.status === 400 || xhr.status === 403 || xhr.status === 404 || xhr.status === 409 || xhr.status === 503) {
+                nf.Dialog.showOkDialog({
+                    headerText: 'Error',
+                    dialogContent: nf.Common.escapeHtml(xhr.responseText)
+                });
+            } else {
+                if (xhr.status < 99 || xhr.status === 12007 || xhr.status === 12029) {
+                    var content = 'Please ensure the application is running and check the logs for any errors.';
+                    if (nf.Common.isDefinedAndNotNull(status)) {
+                        if (status === 'timeout') {
+                            content = 'Request has timed out. Please ensure the application is running and check the logs for any errors.';
+                        } else if (status === 'abort') {
+                            content = 'Request has been aborted.';
+                        } else if (status === 'No Transport') {
+                            content = 'Request transport mechanism failed. Please ensure the host where the application is running is accessible.';
+                        }
+                    }
+                    $('#message-title').text('Unable to communicate with NiFi');
+                    $('#message-content').text(content);
+                } else if (xhr.status === 401) {
+                    $('#message-title').text('Unauthorized');
+                    if ($.trim(xhr.responseText) === '') {
+                        $('#message-content').text('Authentication is required to use this NiFi.');
+                    } else {
+                        $('#message-content').text(xhr.responseText);
+                    }
+                } else if (xhr.status === 500) {
+                    $('#message-title').text('An unexpected error has occurred');
+                    if ($.trim(xhr.responseText) === '') {
+                        $('#message-content').text('An error occurred communicating with the application core. Please check the logs and fix any configuration issues before restarting.');
+                    } else {
+                        $('#message-content').text(xhr.responseText);
+                    }
+                } else if (xhr.status === 200 || xhr.status === 201) {
+                    $('#message-title').text('Parse Error');
+                    if ($.trim(xhr.responseText) === '') {
+                        $('#message-content').text('Unable to interpret response from NiFi.');
+                    } else {
+                        $('#message-content').text(xhr.responseText);
+                    }
+                } else {
+                    $('#message-title').text(xhr.status + ': Unexpected Response');
+                    $('#message-content').text('An unexpected error has occurred. Please check the logs.');
+                }
+
+                // show the error pane
+                $('#message-pane').show();
+
+                // close the canvas
+                nf.Common.closeCanvas();
+            }
+        },
+
+        /**
+         * Closes the canvas by removing the splash screen and stats poller.
+         */
+        closeCanvas: function () {
+            nf.Common.showLogoutLink();
+            
+            // ensure this javascript has been loaded in the nf canvas page
+            if (nf.Common.isDefinedAndNotNull(nf.Canvas)) {
+                // hide the splash screen if required
+                if ($('#splash').is(':visible')) {
+                    nf.Canvas.hideSplash();
+                }
+
+                // hide the context menu
+                nf.ContextMenu.hide();
+
+                // shut off the auto refresh
+                nf.Canvas.stopPolling();
+            }
         },
 
         /**
          * Shows the logout link if appropriate.
          */
         showLogoutLink: function () {
-            if (nfStorage.getItem('jwt') === null) {
+            if (nf.Storage.getItem('jwt') === null) {
                 $('#user-logout-container').css('display', 'none');
             } else {
                 $('#user-logout-container').css('display', 'block');
@@ -742,19 +628,19 @@
          */
         isContentViewConfigured: function () {
             var contentViewerUrl = $('#nifi-content-viewer-url').text();
-            return !nfCommon.isBlank(contentViewerUrl);
+            return !nf.Common.isBlank(contentViewerUrl);
         },
 
         /**
-         * Populates the specified field with the specified value. If the value is
+         * Populates the specified field with the specified value. If the value is 
          * undefined, the field will read 'No value set.' If the value is an empty
          * string, the field will read 'Empty string set.'
-         *
+         * 
          * @argument {string} target        The dom Id of the target
          * @argument {string} value         The value
          */
         populateField: function (target, value) {
-            if (nfCommon.isUndefined(value) || nfCommon.isNull(value)) {
+            if (nf.Common.isUndefined(value) || nf.Common.isNull(value)) {
                 return $('#' + target).addClass('unset').text('No value set');
             } else if (value === '') {
                 return $('#' + target).addClass('blank').text('Empty string set');
@@ -766,7 +652,7 @@
         /**
          * Clears the specified field. Removes any style that may have been applied
          * by a preceeding call to populateField.
-         *
+         * 
          * @argument {string} target        The dom Id of the target
          */
         clearField: function (target) {
@@ -775,11 +661,11 @@
 
         /**
          * Cleans up any tooltips that have been created for the specified container.
-         *
+         * 
          * @param {jQuery} container
          * @param {string} tooltipTarget
          */
-        cleanUpTooltips: function (container, tooltipTarget) {
+        cleanUpTooltips: function(container, tooltipTarget) {
             container.find(tooltipTarget).each(function () {
                 var tip = $(this);
                 if (tip.data('qtip')) {
@@ -791,7 +677,7 @@
 
         /**
          * Formats the tooltip for the specified property.
-         *
+         * 
          * @param {object} propertyDescriptor      The property descriptor
          * @param {object} propertyHistory         The property history
          * @returns {string}
@@ -800,31 +686,23 @@
             var tipContent = [];
 
             // show the property description if applicable
-            if (nfCommon.isDefinedAndNotNull(propertyDescriptor)) {
-                if (!nfCommon.isBlank(propertyDescriptor.description)) {
-                    tipContent.push(nfCommon.escapeHtml(propertyDescriptor.description));
+            if (nf.Common.isDefinedAndNotNull(propertyDescriptor)) {
+                if (!nf.Common.isBlank(propertyDescriptor.description)) {
+                    tipContent.push(nf.Common.escapeHtml(propertyDescriptor.description));
                 }
-                if (!nfCommon.isBlank(propertyDescriptor.defaultValue)) {
-                    tipContent.push('<b>Default value:</b> ' + nfCommon.escapeHtml(propertyDescriptor.defaultValue));
+                if (!nf.Common.isBlank(propertyDescriptor.defaultValue)) {
+                    tipContent.push('<b>Default value:</b> ' + nf.Common.escapeHtml(propertyDescriptor.defaultValue));
                 }
-                if (!nfCommon.isBlank(propertyDescriptor.supportsEl)) {
-                    tipContent.push('<b>Supports expression language:</b> ' + nfCommon.escapeHtml(propertyDescriptor.supportsEl));
-                }
-                if (!nfCommon.isBlank(propertyDescriptor.identifiesControllerService)) {
-                    var formattedType = nfCommon.formatType({
-                        'type': propertyDescriptor.identifiesControllerService,
-                        'bundle': propertyDescriptor.identifiesControllerServiceBundle
-                    });
-                    var formattedBundle = nfCommon.formatBundle(propertyDescriptor.identifiesControllerServiceBundle);
-                    tipContent.push('<b>Requires Controller Service:</b> ' + nfCommon.escapeHtml(formattedType + ' from ' + formattedBundle));
+                if (!nf.Common.isBlank(propertyDescriptor.supportsEl)) {
+                    tipContent.push('<b>Supports expression language:</b> ' + nf.Common.escapeHtml(propertyDescriptor.supportsEl));
                 }
             }
 
-            if (nfCommon.isDefinedAndNotNull(propertyHistory)) {
-                if (!nfCommon.isEmpty(propertyHistory.previousValues)) {
+            if (nf.Common.isDefinedAndNotNull(propertyHistory)) {
+                if (!nf.Common.isEmpty(propertyHistory.previousValues)) {
                     var history = [];
                     $.each(propertyHistory.previousValues, function (_, previousValue) {
-                        history.push('<li>' + nfCommon.escapeHtml(previousValue.previousValue) + ' - ' + nfCommon.escapeHtml(previousValue.timestamp) + ' (' + nfCommon.escapeHtml(previousValue.userIdentity) + ')</li>');
+                        history.push('<li>' + nf.Common.escapeHtml(previousValue.previousValue) + ' - ' + nf.Common.escapeHtml(previousValue.timestamp) + ' (' + nf.Common.escapeHtml(previousValue.userIdentity) + ')</li>');
                     });
                     tipContent.push('<b>History:</b><ul class="property-info">' + history.join('') + '</ul>');
                 }
@@ -839,25 +717,25 @@
 
         /**
          * Formats the specified property (name and value) accordingly.
-         *
+         * 
          * @argument {string} name      The name of the property
          * @argument {string} value     The value of the property
          */
         formatProperty: function (name, value) {
-            return '<div><span class="label">' + nfCommon.formatValue(name) + ': </span>' + nfCommon.formatValue(value) + '</div>';
+            return '<div><span class="label">' + nf.Common.formatValue(name) + ': </span>' + nf.Common.formatValue(value) + '</div>';
         },
 
         /**
          * Formats the specified value accordingly.
-         *
+         * 
          * @argument {string} value     The value of the property
          */
         formatValue: function (value) {
-            if (nfCommon.isDefinedAndNotNull(value)) {
+            if (nf.Common.isDefinedAndNotNull(value)) {
                 if (value === '') {
                     return '<span class="blank" style="font-size: 13px; padding-top: 2px;">Empty string set</span>';
                 } else {
-                    return nfCommon.escapeHtml(value);
+                    return nf.Common.escapeHtml(value);
                 }
             } else {
                 return '<span class="unset" style="font-size: 13px; padding-top: 2px;">No value set</span>';
@@ -865,9 +743,9 @@
         },
 
         /**
-         * HTML escapes the specified string. If the string is null
+         * HTML escapes the specified string. If the string is null 
          * or undefined, an empty string is returned.
-         *
+         * 
          * @returns {string}
          */
         escapeHtml: (function () {
@@ -881,7 +759,7 @@
             };
 
             return function (string) {
-                if (nfCommon.isDefinedAndNotNull(string)) {
+                if (nf.Common.isDefinedAndNotNull(string)) {
                     return String(string).replace(/[&<>"'\/]/g, function (s) {
                         return entityMap[s];
                     });
@@ -893,11 +771,11 @@
 
         /**
          * Determines if the specified property is sensitive.
-         *
+         * 
          * @argument {object} propertyDescriptor        The property descriptor
          */
         isSensitiveProperty: function (propertyDescriptor) {
-            if (nfCommon.isDefinedAndNotNull(propertyDescriptor)) {
+            if (nf.Common.isDefinedAndNotNull(propertyDescriptor)) {
                 return propertyDescriptor.sensitive === true;
             } else {
                 return false;
@@ -906,11 +784,11 @@
 
         /**
          * Determines if the specified property is required.
-         *
+         * 
          * @param {object} propertyDescriptor           The property descriptor
          */
         isRequiredProperty: function (propertyDescriptor) {
-            if (nfCommon.isDefinedAndNotNull(propertyDescriptor)) {
+            if (nf.Common.isDefinedAndNotNull(propertyDescriptor)) {
                 return propertyDescriptor.required === true;
             } else {
                 return false;
@@ -919,11 +797,11 @@
 
         /**
          * Determines if the specified property is required.
-         *
+         * 
          * @param {object} propertyDescriptor           The property descriptor
          */
         isDynamicProperty: function (propertyDescriptor) {
-            if (nfCommon.isDefinedAndNotNull(propertyDescriptor)) {
+            if (nf.Common.isDefinedAndNotNull(propertyDescriptor)) {
                 return propertyDescriptor.dynamic === true;
             } else {
                 return false;
@@ -932,11 +810,11 @@
 
         /**
          * Gets the allowable values for the specified property.
-         *
+         * 
          * @argument {object} propertyDescriptor        The property descriptor
          */
         getAllowableValues: function (propertyDescriptor) {
-            if (nfCommon.isDefinedAndNotNull(propertyDescriptor)) {
+            if (nf.Common.isDefinedAndNotNull(propertyDescriptor)) {
                 return propertyDescriptor.allowableValues;
             } else {
                 return null;
@@ -945,11 +823,11 @@
 
         /**
          * Returns whether the specified property supports EL.
-         *
+         * 
          * @param {object} propertyDescriptor           The property descriptor
          */
         supportsEl: function (propertyDescriptor) {
-            if (nfCommon.isDefinedAndNotNull(propertyDescriptor)) {
+            if (nf.Common.isDefinedAndNotNull(propertyDescriptor)) {
                 return propertyDescriptor.supportsEl === true;
             } else {
                 return false;
@@ -957,9 +835,9 @@
         },
 
         /**
-         * Formats the specified array as an unordered list. If the array is not an
+         * Formats the specified array as an unordered list. If the array is not an 
          * array, null is returned.
-         *
+         * 
          * @argument {array} array      The array to convert into an unordered list
          */
         formatUnorderedList: function (array) {
@@ -983,7 +861,7 @@
          * Extracts the contents of the specified str after the strToFind. If the
          * strToFind is not found or the last part of the str, an empty string is
          * returned.
-         *
+         * 
          * @argument {string} str       The full string
          * @argument {string} strToFind The substring to find
          */
@@ -1027,7 +905,7 @@
          * @argument {string} str       The full string
          * @argument {string} strToFind The substring to find
          */
-        substringBeforeFirst: function (str, strToFind) {
+        substringBeforeFirst: function(str, strToFind) {
             var result = '';
             var indexOfStrToFind = str.indexOf(strToFind);
             if (indexOfStrToFind >= 0) {
@@ -1038,7 +916,7 @@
 
         /**
          * Updates the mouse pointer.
-         *
+         * 
          * @argument {string} domId         The id of the element for the new cursor style
          * @argument {boolean} isMouseOver  Whether or not the mouse is over the element
          */
@@ -1058,7 +936,7 @@
          */
         getAccessToken: function (accessTokenUrl) {
             return $.Deferred(function (deferred) {
-                if (nfStorage.hasItem('jwt')) {
+                if (nf.Storage.hasItem('jwt')) {
                     $.ajax({
                         type: 'POST',
                         url: accessTokenUrl
@@ -1083,7 +961,7 @@
 
         /**
          * Formats the specified duration.
-         *
+         * 
          * @param {integer} duration in millis
          */
         formatDuration: function (duration) {
@@ -1091,35 +969,35 @@
             duration = duration < 1 ? 0 : duration;
 
             // determine the number of days in the specified duration
-            var days = duration / nfCommon.MILLIS_PER_DAY;
+            var days = duration / nf.Common.MILLIS_PER_DAY;
             days = days >= 1 ? parseInt(days, 10) : 0;
-            duration %= nfCommon.MILLIS_PER_DAY;
+            duration %= nf.Common.MILLIS_PER_DAY;
 
             // remaining duration should be less than 1 day, get number of hours
-            var hours = duration / nfCommon.MILLIS_PER_HOUR;
+            var hours = duration / nf.Common.MILLIS_PER_HOUR;
             hours = hours >= 1 ? parseInt(hours, 10) : 0;
-            duration %= nfCommon.MILLIS_PER_HOUR;
+            duration %= nf.Common.MILLIS_PER_HOUR;
 
             // remaining duration should be less than 1 hour, get number of minutes
-            var minutes = duration / nfCommon.MILLIS_PER_MINUTE;
+            var minutes = duration / nf.Common.MILLIS_PER_MINUTE;
             minutes = minutes >= 1 ? parseInt(minutes, 10) : 0;
-            duration %= nfCommon.MILLIS_PER_MINUTE;
+            duration %= nf.Common.MILLIS_PER_MINUTE;
 
             // remaining duration should be less than 1 minute, get number of seconds
-            var seconds = duration / nfCommon.MILLIS_PER_SECOND;
+            var seconds = duration / nf.Common.MILLIS_PER_SECOND;
             seconds = seconds >= 1 ? parseInt(seconds, 10) : 0;
 
             // remaining duration is the number millis (don't support sub millisecond resolution)
-            duration = Math.floor(duration % nfCommon.MILLIS_PER_SECOND);
+            duration = Math.floor(duration % nf.Common.MILLIS_PER_SECOND);
 
             // format the time
-            var time = nfCommon.pad(hours, 2, '0') +
-                ':' +
-                nfCommon.pad(minutes, 2, '0') +
-                ':' +
-                nfCommon.pad(seconds, 2, '0') +
-                '.' +
-                nfCommon.pad(duration, 3, '0');
+            var time = nf.Common.pad(hours, 2, '0') +
+                    ':' +
+                    nf.Common.pad(minutes, 2, '0') +
+                    ':' +
+                    nf.Common.pad(seconds, 2, '0') +
+                    '.' +
+                    nf.Common.pad(duration, 3, '0');
 
             // only include days if appropriate
             if (days > 0) {
@@ -1139,31 +1017,31 @@
 
         /**
          * Formats the specified number of bytes into a human readable string.
-         *
+         * 
          * @param {integer} dataSize
          * @returns {string}
          */
         formatDataSize: function (dataSize) {
             // check terabytes
-            var dataSizeToFormat = parseFloat(dataSize / nfCommon.BYTES_IN_TERABYTE);
+            var dataSizeToFormat = parseFloat(dataSize / nf.Common.BYTES_IN_TERABYTE);
             if (dataSizeToFormat > 1) {
                 return dataSizeToFormat.toFixed(2) + " TB";
             }
 
             // check gigabytes
-            dataSizeToFormat = parseFloat(dataSize / nfCommon.BYTES_IN_GIGABYTE);
+            dataSizeToFormat = parseFloat(dataSize / nf.Common.BYTES_IN_GIGABYTE);
             if (dataSizeToFormat > 1) {
                 return dataSizeToFormat.toFixed(2) + " GB";
             }
 
             // check megabytes
-            dataSizeToFormat = parseFloat(dataSize / nfCommon.BYTES_IN_MEGABYTE);
+            dataSizeToFormat = parseFloat(dataSize / nf.Common.BYTES_IN_MEGABYTE);
             if (dataSizeToFormat > 1) {
                 return dataSizeToFormat.toFixed(2) + " MB";
             }
 
             // check kilobytes
-            dataSizeToFormat = parseFloat(dataSize / nfCommon.BYTES_IN_KILOBYTE);
+            dataSizeToFormat = parseFloat(dataSize / nf.Common.BYTES_IN_KILOBYTE);
             if (dataSizeToFormat > 1) {
                 return dataSizeToFormat.toFixed(2) + " KB";
             }
@@ -1175,7 +1053,7 @@
         /**
          * Formats the specified integer as a string (adding commas). At this
          * point this does not take into account any locales.
-         *
+         * 
          * @param {integer} integer
          */
         formatInteger: function (integer) {
@@ -1189,11 +1067,11 @@
 
         /**
          * Formats the specified float using two demical places.
-         *
+         * 
          * @param {float} f
          */
         formatFloat: function (f) {
-            if (nfCommon.isUndefinedOrNull(f)) {
+            if (nf.Common.isUndefinedOrNull(f)) {
                 return 0.00 + '';
             }
             return f.toFixed(2) + '';
@@ -1203,7 +1081,7 @@
          * Pads the specified value to the specified width with the specified character.
          * If the specified value is already wider than the specified width, the original
          * value is returned.
-         *
+         * 
          * @param {integer} value
          * @param {integer} width
          * @param {string} character
@@ -1222,37 +1100,37 @@
 
         /**
          * Formats the specified DateTime.
-         *
+         * 
          * @param {Date} date
          * @returns {String}
          */
         formatDateTime: function (date) {
-            return nfCommon.pad(date.getMonth() + 1, 2, '0') +
-                '/' +
-                nfCommon.pad(date.getDate(), 2, '0') +
-                '/' +
-                nfCommon.pad(date.getFullYear(), 2, '0') +
-                ' ' +
-                nfCommon.pad(date.getHours(), 2, '0') +
-                ':' +
-                nfCommon.pad(date.getMinutes(), 2, '0') +
-                ':' +
-                nfCommon.pad(date.getSeconds(), 2, '0') +
-                '.' +
-                nfCommon.pad(date.getMilliseconds(), 3, '0');
+            return nf.Common.pad(date.getMonth() + 1, 2, '0') +
+                    '/' +
+                    nf.Common.pad(date.getDate(), 2, '0') +
+                    '/' +
+                    nf.Common.pad(date.getFullYear(), 2, '0') +
+                    ' ' +
+                    nf.Common.pad(date.getHours(), 2, '0') +
+                    ':' +
+                    nf.Common.pad(date.getMinutes(), 2, '0') +
+                    ':' +
+                    nf.Common.pad(date.getSeconds(), 2, '0') +
+                    '.' +
+                    nf.Common.pad(date.getMilliseconds(), 3, '0');
         },
 
         /**
          * Parses the specified date time into a Date object. The resulting
          * object does not account for timezone and should only be used for
          * performing relative comparisons.
-         *
+         * 
          * @param {string} rawDateTime
          * @returns {Date}
          */
         parseDateTime: function (rawDateTime) {
             // handle non date values
-            if (!nfCommon.isDefinedAndNotNull(rawDateTime)) {
+            if (!nf.Common.isDefinedAndNotNull(rawDateTime)) {
                 return new Date();
             }
             if (rawDateTime === 'No value set') {
@@ -1278,25 +1156,19 @@
             if (date.length !== 3 || time.length !== 3) {
                 return new Date();
             }
-            var year = parseInt(date[2], 10);
-            var month = parseInt(date[0], 10) - 1; // new Date() accepts months 0 - 11
-            var day = parseInt(date[1], 10);
-            var hours = parseInt(time[0], 10);
-            var minutes = parseInt(time[1], 10);
 
             // detect if there is millis
-            var secondsSpec = time[2].split(/\./);
-            var seconds = parseInt(secondsSpec[0], 10);
-            var milliseconds = 0;
-            if (secondsSpec.length === 2) {
-                milliseconds = parseInt(secondsSpec[1], 10);
+            var seconds = time[2].split(/\./);
+            if (seconds.length === 2) {
+                return new Date(parseInt(date[2], 10), parseInt(date[0], 10), parseInt(date[1], 10), parseInt(time[0], 10), parseInt(time[1], 10), parseInt(seconds[0], 10), parseInt(seconds[1], 10));
+            } else {
+                return new Date(parseInt(date[2], 10), parseInt(date[0], 10), parseInt(date[1], 10), parseInt(time[0], 10), parseInt(time[1], 10), parseInt(time[2], 10), 0);
             }
-            return new Date(year, month, day, hours, minutes, seconds, milliseconds);
         },
 
         /**
          * Parses the specified duration and returns the total number of millis.
-         *
+         * 
          * @param {string} rawDuration
          * @returns {number}        The number of millis
          */
@@ -1319,7 +1191,7 @@
 
         /**
          * Parses the specified size.
-         *
+         * 
          * @param {string} rawSize
          * @returns {int}
          */
@@ -1343,7 +1215,7 @@
 
         /**
          * Parses the specified count.
-         *
+         * 
          * @param {string} rawCount
          * @returns {int}
          */
@@ -1368,25 +1240,25 @@
 
         /**
          * Determines if the specified object is defined and not null.
-         *
+         * 
          * @argument {object} obj   The object to test
          */
         isDefinedAndNotNull: function (obj) {
-            return !nfCommon.isUndefined(obj) && !nfCommon.isNull(obj);
+            return !nf.Common.isUndefined(obj) && !nf.Common.isNull(obj);
         },
 
         /**
          * Determines if the specified object is undefined or null.
-         *
+         * 
          * @param {object} obj      The object to test
          */
         isUndefinedOrNull: function (obj) {
-            return nfCommon.isUndefined(obj) || nfCommon.isNull(obj);
+            return nf.Common.isUndefined(obj) || nf.Common.isNull(obj);
         },
 
         /**
          * Determines if the specified object is undefined.
-         *
+         * 
          * @argument {object} obj   The object to test
          */
         isUndefined: function (obj) {
@@ -1395,16 +1267,16 @@
 
         /**
          * Determines whether the specified string is blank (or null or undefined).
-         *
+         * 
          * @argument {string} str   The string to test
          */
         isBlank: function (str) {
-            return nfCommon.isUndefined(str) || nfCommon.isNull(str) || $.trim(str) === '';
+            return nf.Common.isUndefined(str) || nf.Common.isNull(str) || $.trim(str) === '';
         },
 
         /**
          * Determines if the specified object is null.
-         *
+         * 
          * @argument {object} obj   The object to test
          */
         isNull: function (obj) {
@@ -1414,7 +1286,7 @@
         /**
          * Determines if the specified array is empty. If the specified arg is not an
          * array, then true is returned.
-         *
+         * 
          * @argument {array} arr    The array to test
          */
         isEmpty: function (arr) {
@@ -1424,7 +1296,7 @@
         /**
          * Determines if these are the same bulletins. If both arguments are not
          * arrays, false is returned.
-         *
+         * 
          * @param {array} bulletins
          * @param {array} otherBulletins
          * @returns {boolean}
@@ -1448,7 +1320,7 @@
 
         /**
          * Formats the specified bulletin list.
-         *
+         * 
          * @argument {array} bulletins      The bulletins
          * @return {array}                  The jQuery objects
          */
@@ -1460,8 +1332,8 @@
 
                     // format the node address
                     var nodeAddress = '';
-                    if (nfCommon.isDefinedAndNotNull(bulletin.nodeAddress)) {
-                        nodeAddress = '-&nbsp;' + nfCommon.escapeHtml(bulletin.nodeAddress) + '&nbsp;-&nbsp;';
+                    if (nf.Common.isDefinedAndNotNull(bulletin.nodeAddress)) {
+                        nodeAddress = '-&nbsp' + nf.Common.escapeHtml(bulletin.nodeAddress) + '&nbsp;-&nbsp;';
                     }
 
                     // set the bulletin message (treat as text)
@@ -1471,10 +1343,10 @@
 
                     // create the bulletin message
                     var formattedBulletin = $('<div>' +
-                        nfCommon.escapeHtml(bulletin.timestamp) + '&nbsp;' +
-                        nodeAddress + '&nbsp;' +
-                        '<b>' + nfCommon.escapeHtml(bulletin.level) + '</b>&nbsp;' +
-                        '</div>').append(bulletinMessage);
+                            nf.Common.escapeHtml(bulletin.timestamp) + '&nbsp;' +
+                            nodeAddress + '&nbsp;' +
+                            '<b>' + nf.Common.escapeHtml(bulletin.level) + '</b>&nbsp;' +
+                            '</div>').append(bulletinMessage);
 
                     formattedBulletinEntities.push(formattedBulletin);
                 }
@@ -1482,56 +1354,11 @@
             return formattedBulletinEntities;
         },
 
-        /**
-         * Formats the specified controller service list.
-         *
-         * @param {array} controllerServiceApis
-         * @returns {array}
-         */
-        getFormattedServiceApis: function (controllerServiceApis) {
-            var formattedControllerServiceApis = [];
-            $.each(controllerServiceApis, function (i, controllerServiceApi) {
-                var formattedType = nfCommon.formatType({
-                    'type': controllerServiceApi.type,
-                    'bundle': controllerServiceApi.bundle
-                });
-                var formattedBundle = nfCommon.formatBundle(controllerServiceApi.bundle);
-                formattedControllerServiceApis.push($('<div></div>').text(formattedType + ' from ' + formattedBundle));
-            });
-            return formattedControllerServiceApis;
-        },
-
-        /**
-         * Formats the specified garbage collections list.
-         *
-         * @param {array} garbageCollections    The garbage collections
-         * @returns {array}                     The formatted messages
-         */
-        getFormattedGarbageCollections: function (garbageCollections) {
-            // sort the garbage collections
-            garbageCollections.sort(function (a, b) {
-                return b.collectionCount - a.collectionCount;
-            });
-
-            var formattedGarbageCollections = [];
-            $.each(garbageCollections, function (_, garbageCollection) {
-                var name = $('<span style="font-weight: bold;"></span>').text(garbageCollection.name);
-                var stats = $('<span></span>').text(' - ' + garbageCollection.collectionCount + ' times (' + garbageCollection.collectionTime + ')');
-                var gc = $('<div></div>').append(name).append(stats);
-                formattedGarbageCollections.push(gc);
-            });
-            return formattedGarbageCollections;
-        },
-
         getPolicyTypeListing: function (value) {
             var nest = d3.nest()
-                .key(function (d) {
-                    return d.value;
-                })
+                .key(function(d) { return d.value; })
                 .map(policyTypeListing, d3.map);
             return nest.get(value)[0];
         }
     };
-
-    return nfCommon;
-}));
+}());

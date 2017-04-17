@@ -23,8 +23,6 @@ public interface DatabaseAdapter {
 
     String getName();
 
-    String getDescription();
-
     /**
      * Returns a SQL SELECT statement with the given clauses applied.
      *
@@ -36,5 +34,5 @@ public interface DatabaseAdapter {
      * @param offset        The value for the OFFSET clause (i.e. the number of rows to skip)
      * @return A String containing a SQL SELECT statement with the given clauses applied
      */
-    String getSelectStatement(String tableName, String columnNames, String whereClause, String orderByClause, Long limit, Long offset);
+    String getSelectStatement(String tableName, String columnNames, String whereClause, String orderByClause, Integer limit, Integer offset);
 }

@@ -127,7 +127,6 @@ public class DistributedSetCacheClientService extends AbstractControllerService 
         final VersionNegotiator versionNegotiator = new StandardVersionNegotiator(1);
         try {
             ProtocolHandshake.initiateHandshake(session.getInputStream(), session.getOutputStream(), versionNegotiator);
-            session.setProtocolVersion(versionNegotiator.getVersion());
         } catch (final HandshakeException e) {
             IOUtils.closeQuietly(session);
 

@@ -21,12 +21,11 @@ import org.apache.nifi.authorization.Resource;
 import org.apache.nifi.authorization.resource.Authorizable;
 import org.apache.nifi.authorization.resource.ResourceFactory;
 import org.apache.nifi.authorization.resource.ResourceType;
-import org.apache.nifi.controller.ReloadComponent;
 import org.apache.nifi.controller.FlowController;
-import org.apache.nifi.controller.LoggableComponent;
 import org.apache.nifi.controller.ProcessScheduler;
 import org.apache.nifi.controller.ReportingTaskNode;
 import org.apache.nifi.controller.ValidationContextFactory;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.registry.VariableRegistry;
 import org.apache.nifi.reporting.ReportingContext;
 import org.apache.nifi.reporting.ReportingTask;
@@ -35,19 +34,17 @@ public class StandardReportingTaskNode extends AbstractReportingTaskNode impleme
 
     private final FlowController flowController;
 
-    public StandardReportingTaskNode(final LoggableComponent<ReportingTask> reportingTask, final String id, final FlowController controller,
+    public StandardReportingTaskNode(final ReportingTask reportingTask, final String id, final FlowController controller,
                                      final ProcessScheduler processScheduler, final ValidationContextFactory validationContextFactory,
-                                     final VariableRegistry variableRegistry, final ReloadComponent reloadComponent) {
-        super(reportingTask, id, controller, processScheduler, validationContextFactory, variableRegistry, reloadComponent);
+                                     final VariableRegistry variableRegistry, final ComponentLog logger) {
+        super(reportingTask, id, controller, processScheduler, validationContextFactory, variableRegistry, logger);
         this.flowController = controller;
     }
 
-    public StandardReportingTaskNode(final LoggableComponent<ReportingTask> reportingTask, final String id, final FlowController controller,
-                                     final ProcessScheduler processScheduler, final ValidationContextFactory validationContextFactory,
-                                     final String componentType, final String canonicalClassName, final VariableRegistry variableRegistry,
-                                     final ReloadComponent reloadComponent, final boolean isExtensionMissing) {
-        super(reportingTask, id, controller, processScheduler, validationContextFactory, componentType, canonicalClassName,
-                variableRegistry, reloadComponent, isExtensionMissing);
+    public StandardReportingTaskNode(final ReportingTask reportingTask, final String id, final FlowController controller,
+        final ProcessScheduler processScheduler, final ValidationContextFactory validationContextFactory,
+        final String componentType, final String canonicalClassName, final VariableRegistry variableRegistry, final ComponentLog logger) {
+        super(reportingTask, id, controller, processScheduler, validationContextFactory, componentType, canonicalClassName,variableRegistry, logger);
         this.flowController = controller;
     }
 

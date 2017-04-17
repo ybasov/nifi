@@ -15,42 +15,9 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'd3',
-                'nf.Connection',
-                'nf.Common',
-                'nf.Client',
-                'nf.CanvasUtils'],
-            function ($, d3, nfConnection, nfCommon, nfClient, nfCanvasUtils) {
-                return (nf.RemoteProcessGroup = factory($, d3, nfConnection, nfCommon, nfClient, nfCanvasUtils));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.RemoteProcessGroup =
-            factory(require('jquery'),
-                require('d3'),
-                require('nf.Connection'),
-                require('nf.Common'),
-                require('nf.Client'),
-                require('nf.CanvasUtils')));
-    } else {
-        nf.RemoteProcessGroup = factory(root.$,
-            root.d3,
-            root.nf.Connection,
-            root.nf.Common,
-            root.nf.Client,
-            root.nf.CanvasUtils);
-    }
-}(this, function ($, d3, nfConnection, nfCommon, nfClient, nfCanvasUtils) {
-    'use strict';
-
-    var nfConnectable;
-    var nfDraggable;
-    var nfSelectable;
-    var nfContextMenu;
+nf.RemoteProcessGroup = (function () {
 
     var PREVIEW_NAME_LENGTH = 30;
 
@@ -88,7 +55,7 @@
      * @param {object} d
      */
     var getProcessGroupComments = function (d) {
-        if (nfCommon.isBlank(d.component.comments)) {
+        if (nf.Common.isBlank(d.component.comments)) {
             return 'No comments specified';
         } else {
             return d.component.comments;
@@ -123,7 +90,7 @@
                 'class': 'remote-process-group component'
             })
             .classed('selected', selected)
-            .call(nfCanvasUtils.position);
+            .call(nf.CanvasUtils.position);
 
         // ----
         // body
@@ -178,7 +145,7 @@
             });
 
         // always support selection
-        remoteProcessGroup.call(nfSelectable.activate).call(nfContextMenu.activate);
+        remoteProcessGroup.call(nf.Selectable.activate).call(nf.ContextMenu.activate);
     };
 
     // attempt of space between component count and icon for process group contents
@@ -211,7 +178,7 @@
             var details = remoteProcessGroup.select('g.remote-process-group-details');
 
             // update the component behavior as appropriate
-            nfCanvasUtils.editable(remoteProcessGroup, nfConnectable, nfDraggable);
+            nf.CanvasUtils.editable(remoteProcessGroup);
 
             // if this processor is visible, render everything
             if (remoteProcessGroup.classed('visible')) {
@@ -532,7 +499,7 @@
                             remoteProcessGroupUri.text(null).selectAll('title').remove();
 
                             // apply ellipsis to the remote process group name as necessary
-                            nfCanvasUtils.ellipsis(remoteProcessGroupUri, d.component.targetUris);
+                            nf.CanvasUtils.ellipsis(remoteProcessGroupUri, d.component.targetUri);
                         }).append('title').text(function (d) {
                         return d.component.name;
                     });
@@ -563,15 +530,15 @@
 
                             // update the tip
                             tip.text(function () {
-                                if (d.component.targetSecure === true) {
-                                    return 'Site-to-Site is secure.';
-                                } else {
-                                    return 'Site-to-Site is NOT secure.';
-                                }
-                            });
+                                    if (d.component.targetSecure === true) {
+                                        return 'Site-to-Site is secure.';
+                                    } else {
+                                        return 'Site-to-Site is NOT secure.';
+                                    }
+                                });
 
                             // add the tooltip
-                            nfCanvasUtils.canvasTooltip(tip, d3.select(this));
+                            nf.CanvasUtils.canvasTooltip(tip, d3.select(this));
                         });
 
                     // ---------------
@@ -587,9 +554,9 @@
                             remoteProcessGroupComments.text(null).selectAll('tspan, title').remove();
 
                             // apply ellipsis to the port name as necessary
-                            nfCanvasUtils.ellipsis(remoteProcessGroupComments, getProcessGroupComments(d));
+                            nf.CanvasUtils.ellipsis(remoteProcessGroupComments, getProcessGroupComments(d));
                         }).classed('unset', function (d) {
-                        return nfCommon.isBlank(d.component.comments);
+                        return nf.Common.isBlank(d.component.comments);
                     }).append('title').text(function (d) {
                         return getProcessGroupComments(d);
                     });
@@ -600,7 +567,7 @@
 
                     details.select('text.remote-process-group-last-refresh')
                         .text(function (d) {
-                            if (nfCommon.isDefinedAndNotNull(d.component.flowRefreshed)) {
+                            if (nf.Common.isDefinedAndNotNull(d.component.flowRefreshed)) {
                                 return d.component.flowRefreshed;
                             } else {
                                 return 'Remote flow not current';
@@ -616,7 +583,7 @@
                             remoteProcessGroupName.text(null).selectAll('title').remove();
 
                             // apply ellipsis to the remote process group name as necessary
-                            nfCanvasUtils.ellipsis(remoteProcessGroupName, d.component.name);
+                            nf.CanvasUtils.ellipsis(remoteProcessGroupName, d.component.name);
                         }).append('title').text(function (d) {
                         return d.component.name;
                     });
@@ -667,21 +634,6 @@
         });
     };
 
-    var hasIssues = function (d) {
-        return !nfCommon.isEmpty(d.component.authorizationIssues) || !nfCommon.isEmpty(d.component.validationErrors);
-    };
-
-    var getIssues = function (d) {
-        var issues = [];
-        if (!nfCommon.isEmpty(d.component.authorizationIssues)) {
-            issues = issues.concat(d.component.authorizationIssues);
-        }
-        if (!nfCommon.isEmpty(d.component.validationErrors)) {
-            issues = issues.concat(d.component.validationErrors);
-        }
-        return issues;
-    };
-
     /**
      * Updates the process group status.
      *
@@ -695,13 +647,13 @@
         // sent count value
         updated.select('text.remote-process-group-sent tspan.count')
             .text(function (d) {
-                return nfCommon.substringBeforeFirst(d.status.aggregateSnapshot.sent, ' ');
+                return nf.Common.substringBeforeFirst(d.status.aggregateSnapshot.sent, ' ');
             });
 
         // sent size value
         updated.select('text.remote-process-group-sent tspan.size')
             .text(function (d) {
-                return ' ' + nfCommon.substringAfterFirst(d.status.aggregateSnapshot.sent, ' ');
+                return ' ' + nf.Common.substringAfterFirst(d.status.aggregateSnapshot.sent, ' ');
             });
 
         // sent ports value
@@ -719,13 +671,13 @@
         // received count value
         updated.select('text.remote-process-group-received tspan.count')
             .text(function (d) {
-                return nfCommon.substringBeforeFirst(d.status.aggregateSnapshot.received, ' ');
+                return nf.Common.substringBeforeFirst(d.status.aggregateSnapshot.received, ' ');
             });
 
         // received size value
         updated.select('text.remote-process-group-received tspan.size')
             .text(function (d) {
-                return ' ' + nfCommon.substringAfterFirst(d.status.aggregateSnapshot.received, ' ');
+                return ' ' + nf.Common.substringAfterFirst(d.status.aggregateSnapshot.received, ' ');
             });
 
         // --------------------
@@ -738,7 +690,7 @@
             .text(function (d) {
                 var icon = '';
                 if (d.permissions.canRead) {
-                    if (hasIssues(d)) {
+                    if (!nf.Common.isEmpty(d.component.authorizationIssues)) {
                         icon = '\uf071';
                     } else if (d.component.transmitting === true) {
                         icon = '\uf140';
@@ -751,7 +703,7 @@
             .attr('font-family', function (d) {
                 var family = '';
                 if (d.permissions.canRead) {
-                    if (hasIssues(d) || d.component.transmitting) {
+                    if (!nf.Common.isEmpty(d.component.authorizationIssues) || d.component.transmitting) {
                         family = 'FontAwesome';
                     } else {
                         family = 'flowfont';
@@ -760,20 +712,20 @@
                 return family;
             })
             .classed('invalid', function (d) {
-                return d.permissions.canRead && hasIssues(d);
+                return d.permissions.canRead && !nf.Common.isEmpty(d.component.authorizationIssues);
             })
             .classed('transmitting', function (d) {
-                return d.permissions.canRead && !hasIssues(d) && d.component.transmitting === true;
+                return d.permissions.canRead && nf.Common.isEmpty(d.component.authorizationIssues) && d.component.transmitting === true;
             })
             .classed('not-transmitting', function (d) {
-                return d.permissions.canRead && !hasIssues(d) && d.component.transmitting === false;
+                return d.permissions.canRead && nf.Common.isEmpty(d.component.authorizationIssues) && d.component.transmitting === false;
             })
             .each(function (d) {
                 // get the tip
                 var tip = d3.select('#authorization-issues-' + d.id);
 
                 // if there are validation errors generate a tooltip
-                if (d.permissions.canRead && hasIssues(d)) {
+                if (d.permissions.canRead && !nf.Common.isEmpty(d.component.authorizationIssues)) {
                     // create the tip if necessary
                     if (tip.empty()) {
                         tip = d3.select('#remote-process-group-tooltips').append('div')
@@ -785,16 +737,16 @@
 
                     // update the tip
                     tip.html(function () {
-                        var list = nfCommon.formatUnorderedList(getIssues(d));
-                        if (list === null || list.length === 0) {
-                            return '';
-                        } else {
-                            return $('<div></div>').append(list).html();
-                        }
-                    });
+                            var list = nf.Common.formatUnorderedList(d.component.authorizationIssues);
+                            if (list === null || list.length === 0) {
+                                return '';
+                            } else {
+                                return $('<div></div>').append(list).html();
+                            }
+                        });
 
                     // add the tooltip
-                    nfCanvasUtils.canvasTooltip(tip, d3.select(this));
+                    nf.CanvasUtils.canvasTooltip(tip, d3.select(this));
                 } else {
                     if (!tip.empty()) {
                         tip.remove();
@@ -810,7 +762,7 @@
             // active thread count
             // -------------------            
 
-            nfCanvasUtils.activeThreadCount(remoteProcessGroup, d, function (off) {
+            nf.CanvasUtils.activeThreadCount(remoteProcessGroup, d, function (off) {
                 offset = off;
             });
 
@@ -819,10 +771,10 @@
             // ---------
 
             remoteProcessGroup.select('rect.bulletin-background').classed('has-bulletins', function () {
-                return !nfCommon.isEmpty(d.status.aggregateSnapshot.bulletins);
+                return !nf.Common.isEmpty(d.status.aggregateSnapshot.bulletins);
             });
 
-            nfCanvasUtils.bulletins(remoteProcessGroup, d, function () {
+            nf.CanvasUtils.bulletins(remoteProcessGroup, d, function () {
                 return d3.select('#remote-process-group-tooltips');
             }, offset);
         });
@@ -855,21 +807,11 @@
         });
     };
 
-    var nfRemoteProcessGroup = {
+    return {
         /**
          * Initializes of the Process Group handler.
-         *
-         * @param nfConnectableRef   The nfConnectable module.
-         * @param nfDraggableRef   The nfDraggable module.
-         * @param nfSelectableRef   The nfSelectable module.
-         * @param nfContextMenuRef   The nfContextMenu module.
          */
-        init: function (nfConnectableRef, nfDraggableRef, nfSelectableRef, nfContextMenuRef) {
-            nfConnectable = nfConnectableRef;
-            nfDraggable = nfDraggableRef;
-            nfSelectable = nfSelectableRef;
-            nfContextMenu = nfContextMenuRef;
-
+        init: function () {
             remoteProcessGroupMap = d3.map();
             removedCache = d3.map();
             addedCache = d3.map();
@@ -890,8 +832,8 @@
          */
         add: function (remoteProcessGroupEntities, options) {
             var selectAll = false;
-            if (nfCommon.isDefinedAndNotNull(options)) {
-                selectAll = nfCommon.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
+            if (nf.Common.isDefinedAndNotNull(options)) {
+                selectAll = nf.Common.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
             }
 
             // get the current time
@@ -912,7 +854,7 @@
                 $.each(remoteProcessGroupEntities, function (_, remoteProcessGroupEntity) {
                     add(remoteProcessGroupEntity);
                 });
-            } else if (nfCommon.isDefinedAndNotNull(remoteProcessGroupEntities)) {
+            } else if (nf.Common.isDefinedAndNotNull(remoteProcessGroupEntities)) {
                 add(remoteProcessGroupEntities);
             }
 
@@ -921,7 +863,7 @@
             selection.enter().call(renderRemoteProcessGroups, selectAll);
             selection.call(updateRemoteProcessGroups);
         },
-
+        
         /**
          * Populates the graph with the specified remote process groups.
          *
@@ -931,16 +873,16 @@
         set: function (remoteProcessGroupEntities, options) {
             var selectAll = false;
             var transition = false;
-            if (nfCommon.isDefinedAndNotNull(options)) {
-                selectAll = nfCommon.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
-                transition = nfCommon.isDefinedAndNotNull(options.transition) ? options.transition : transition;
+            if (nf.Common.isDefinedAndNotNull(options)) {
+                selectAll = nf.Common.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
+                transition = nf.Common.isDefinedAndNotNull(options.transition) ? options.transition : transition;
             }
 
             var set = function (proposedRemoteProcessGroupEntity) {
                 var currentRemoteProcessGroupEntity = remoteProcessGroupMap.get(proposedRemoteProcessGroupEntity.id);
 
                 // set the remote process group if appropriate due to revision and wasn't previously removed
-                if (nfClient.isNewerRevision(currentRemoteProcessGroupEntity, proposedRemoteProcessGroupEntity) && !removedCache.has(proposedRemoteProcessGroupEntity.id)) {
+                if (nf.Client.isNewerRevision(currentRemoteProcessGroupEntity, proposedRemoteProcessGroupEntity) && !removedCache.has(proposedRemoteProcessGroupEntity.id)) {
                     remoteProcessGroupMap.set(proposedRemoteProcessGroupEntity.id, $.extend({
                         type: 'RemoteProcessGroup',
                         dimensions: dimensions
@@ -964,14 +906,14 @@
                 $.each(remoteProcessGroupEntities, function (_, remoteProcessGroupEntity) {
                     set(remoteProcessGroupEntity);
                 });
-            } else if (nfCommon.isDefinedAndNotNull(remoteProcessGroupEntities)) {
+            } else if (nf.Common.isDefinedAndNotNull(remoteProcessGroupEntities)) {
                 set(remoteProcessGroupEntities);
             }
 
             // apply the selection and handle all new remote process groups
             var selection = select();
             selection.enter().call(renderRemoteProcessGroups, selectAll);
-            selection.call(updateRemoteProcessGroups).call(nfCanvasUtils.position, transition);
+            selection.call(updateRemoteProcessGroups).call(nf.CanvasUtils.position, transition);
             selection.exit().call(removeRemoteProcessGroups);
         },
 
@@ -982,7 +924,7 @@
          * @param {string} id
          */
         get: function (id) {
-            if (nfCommon.isUndefined(id)) {
+            if (nf.Common.isUndefined(id)) {
                 return remoteProcessGroupMap.values();
             } else {
                 return remoteProcessGroupMap.get(id);
@@ -996,7 +938,7 @@
          * @param {string} id      Optional
          */
         refresh: function (id) {
-            if (nfCommon.isDefinedAndNotNull(id)) {
+            if (nf.Common.isDefinedAndNotNull(id)) {
                 d3.select('#id-' + id).call(updateRemoteProcessGroups);
             } else {
                 d3.selectAll('g.remote-process-group').call(updateRemoteProcessGroups);
@@ -1024,13 +966,13 @@
                     url: remoteProcessGroupEntity.uri,
                     dataType: 'json'
                 }).done(function (response) {
-                    nfRemoteProcessGroup.set(response);
+                    nf.RemoteProcessGroup.set(response);
 
                     // reload the group's connections
-                    var connections = nfConnection.getComponentConnections(id);
+                    var connections = nf.Connection.getComponentConnections(id);
                     $.each(connections, function (_, connection) {
                         if (connection.permissions.canRead) {
-                            nfConnection.reload(connection.id);
+                            nf.Connection.reload(connection.id);
                         }
                     });
                 });
@@ -1043,7 +985,7 @@
          * @param {string} id   The id
          */
         position: function (id) {
-            d3.select('#id-' + id).call(nfCanvasUtils.position);
+            d3.select('#id-' + id).call(nf.CanvasUtils.position);
         },
 
         /**
@@ -1072,7 +1014,7 @@
          * Removes all remote process groups.
          */
         removeAll: function () {
-            nfRemoteProcessGroup.remove(remoteProcessGroupMap.keys());
+            nf.RemoteProcessGroup.remove(remoteProcessGroupMap.keys());
         },
 
         /**
@@ -1093,6 +1035,4 @@
             expire(removedCache);
         }
     };
-
-    return nfRemoteProcessGroup;
-}));
+}());

@@ -38,7 +38,7 @@ public class TestIdentifyMimeType {
         final TestRunner runner = TestRunners.newTestRunner(new IdentifyMimeType());
 
         final File dir = new File("src/test/resources/TestIdentifyMimeType");
-        final File[] files = dir.listFiles((ldir,name)-> name != null && !name.startsWith("."));
+        final File[] files = dir.listFiles();
         int fileCount = 0;
         for (final File file : files) {
             if (file.isDirectory()) {

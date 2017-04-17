@@ -24,7 +24,4 @@ public class ProcessorInstantiationException extends Exception {
         super(className, t);
     }
 
-    public ProcessorInstantiationException(final String className) {
-        super(className);
-    }
 }

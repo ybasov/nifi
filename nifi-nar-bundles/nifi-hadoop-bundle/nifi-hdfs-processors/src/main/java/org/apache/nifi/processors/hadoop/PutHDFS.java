@@ -27,6 +27,7 @@ import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
 import org.apache.nifi.annotation.behavior.ReadsAttribute;
 import org.apache.nifi.annotation.behavior.Restricted;
+import org.apache.nifi.annotation.behavior.RequiresInstanceClassLoading;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
 import org.apache.nifi.annotation.behavior.WritesAttributes;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
@@ -67,6 +68,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * This processor copies FlowFiles to HDFS.
  */
+@RequiresInstanceClassLoading
 @InputRequirement(Requirement.INPUT_REQUIRED)
 @Tags({"hadoop", "HDFS", "put", "copy", "filesystem", "restricted"})
 @CapabilityDescription("Write FlowFile data to Hadoop Distributed File System (HDFS)")
@@ -178,7 +180,7 @@ public class PutHDFS extends AbstractHadoopProcessor {
         List<PropertyDescriptor> props = new ArrayList<>(properties);
         props.add(new PropertyDescriptor.Builder()
                 .fromPropertyDescriptor(DIRECTORY)
-                .description("The parent HDFS directory to which files should be written. The directory will be created if it doesn't exist.")
+                .description("The parent HDFS directory to which files should be written")
                 .build());
         props.add(CONFLICT_RESOLUTION);
         props.add(BLOCK_SIZE);

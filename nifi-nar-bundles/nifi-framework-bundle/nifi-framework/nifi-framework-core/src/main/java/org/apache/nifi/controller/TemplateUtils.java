@@ -17,7 +17,21 @@
 
 package org.apache.nifi.controller;
 
+import java.io.DataInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.Unmarshaller;
+import javax.xml.transform.dom.DOMSource;
+
 import org.apache.nifi.persistence.TemplateDeserializer;
+import org.apache.nifi.stream.io.ByteArrayInputStream;
 import org.apache.nifi.stream.io.StreamUtils;
 import org.apache.nifi.web.api.dto.ConnectableDTO;
 import org.apache.nifi.web.api.dto.ConnectionDTO;
@@ -31,19 +45,6 @@ import org.apache.nifi.web.api.dto.RelationshipDTO;
 import org.apache.nifi.web.api.dto.RemoteProcessGroupDTO;
 import org.apache.nifi.web.api.dto.TemplateDTO;
 import org.w3c.dom.Element;
-
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.Unmarshaller;
-import javax.xml.transform.dom.DOMSource;
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 public class TemplateUtils {
 
@@ -192,14 +193,10 @@ public class TemplateUtils {
                 processorConfig.setAutoTerminatedRelationships(null);
             }
 
-            if (processorDTO.getRelationships() != null) {
-                for (final RelationshipDTO relationship : processorDTO.getRelationships()) {
-                    relationship.setDescription(null);
-                }
+            for (final RelationshipDTO relationship : processorDTO.getRelationships()) {
+                relationship.setDescription(null);
             }
 
-            processorDTO.setExtensionMissing(null);
-            processorDTO.setMultipleVersionsAvailable(null);
             processorDTO.setValidationErrors(null);
             processorDTO.setInputRequirement(null);
             processorDTO.setDescription(null);
@@ -230,7 +227,6 @@ public class TemplateUtils {
         descriptor.setRequired(null);
         descriptor.setSensitive(null);
         descriptor.setSupportsEl(null);
-        descriptor.setIdentifiesControllerServiceBundle(null);
     }
 
     private static void scrubControllerServices(final Set<ControllerServiceDTO> controllerServices) {
@@ -247,11 +243,6 @@ public class TemplateUtils {
                     scrubPropertyDescriptor(descriptor);
                 }
             }
-
-            serviceDTO.setControllerServiceApis(null);
-
-            serviceDTO.setExtensionMissing(null);
-            serviceDTO.setMultipleVersionsAvailable(null);
 
             serviceDTO.setCustomUiUrl(null);
             serviceDTO.setValidationErrors(null);

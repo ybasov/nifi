@@ -17,6 +17,7 @@
 package org.apache.nifi.processors.hive;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import java.io.File;
 import org.apache.avro.Schema;
 import org.apache.avro.file.CodecFactory;
 import org.apache.avro.file.DataFileConstants;
@@ -25,13 +26,12 @@ import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hive.hcatalog.streaming.ConnectionError;
 import org.apache.hive.hcatalog.streaming.HiveEndPoint;
 import org.apache.hive.hcatalog.streaming.SerializationError;
 import org.apache.hive.hcatalog.streaming.StreamingException;
-import org.apache.nifi.annotation.behavior.RequiresInstanceClassLoading;
 import org.apache.nifi.annotation.behavior.TriggerSerially;
 import org.apache.nifi.annotation.behavior.WritesAttribute;
 import org.apache.nifi.annotation.behavior.WritesAttributes;
@@ -61,7 +61,6 @@ import org.apache.nifi.util.hive.HiveWriter;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -95,7 +94,6 @@ import java.util.regex.Pattern;
         @WritesAttribute(attribute = "hivestreaming.record.count", description = "This attribute is written on the flow files routed to the 'success' "
                 + "and 'failure' relationships, and contains the number of records from the incoming flow file written successfully and unsuccessfully, respectively.")
 })
-@RequiresInstanceClassLoading
 public class PutHiveStreaming extends AbstractProcessor {
 
     // Attributes
@@ -221,16 +219,6 @@ public class PutHiveStreaming extends AbstractProcessor {
             .defaultValue("100")
             .build();
 
-    public static final PropertyDescriptor RECORDS_PER_TXN = new PropertyDescriptor.Builder()
-            .name("hive-stream-records-per-transaction")
-            .displayName("Records per Transaction")
-            .description("Number of records to process before committing the transaction. This value must be greater than 1.")
-            .required(true)
-            .expressionLanguageSupported(true)
-            .addValidator(GREATER_THAN_ONE_VALIDATOR)
-            .defaultValue("10000")
-            .build();
-
     // Relationships
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
@@ -260,7 +248,6 @@ public class PutHiveStreaming extends AbstractProcessor {
 
     protected volatile HiveConfigurator hiveConfigurator = new HiveConfigurator();
     protected volatile UserGroupInformation ugi;
-    protected volatile HiveConf hiveConfig;
 
     protected final AtomicBoolean isInitialized = new AtomicBoolean(false);
 
@@ -283,7 +270,6 @@ public class PutHiveStreaming extends AbstractProcessor {
         props.add(MAX_OPEN_CONNECTIONS);
         props.add(HEARTBEAT_INTERVAL);
         props.add(TXNS_PER_BATCH);
-        props.add(RECORDS_PER_TXN);
 
         kerberosConfigFile = context.getKerberosConfigurationFile();
         kerberosProperties = new KerberosProperties(kerberosConfigFile);
@@ -321,7 +307,7 @@ public class PutHiveStreaming extends AbstractProcessor {
         final Integer heartbeatInterval = context.getProperty(HEARTBEAT_INTERVAL).asInteger();
         final Integer txnsPerBatch = context.getProperty(TXNS_PER_BATCH).asInteger();
         final String configFiles = context.getProperty(HIVE_CONFIGURATION_RESOURCES).getValue();
-        hiveConfig = hiveConfigurator.getConfigurationFromFiles(configFiles);
+        final Configuration hiveConfig = hiveConfigurator.getConfigurationFromFiles(configFiles);
 
         // add any dynamic properties to the Hive configuration
         for (final Map.Entry<PropertyDescriptor, String> entry : context.getProperties().entrySet()) {
@@ -351,8 +337,6 @@ public class PutHiveStreaming extends AbstractProcessor {
             }
             log.info("Successfully logged in as principal {} with keytab {}", new Object[]{principal, keyTab});
             options = options.withKerberosPrincipal(principal).withKerberosKeytab(keyTab);
-        } else {
-            ugi = null;
         }
 
         allWriters = new ConcurrentHashMap<>();
@@ -373,7 +357,7 @@ public class PutHiveStreaming extends AbstractProcessor {
         }
 
         final ComponentLog log = getLogger();
-        final Integer recordsPerTxn = context.getProperty(RECORDS_PER_TXN).asInteger();
+        final Integer txnsPerBatch = context.getProperty(TXNS_PER_BATCH).asInteger();
 
         // Store the original class loader, then explicitly set it to this class's classloader (for use by the Hive Metastore)
         ClassLoader originalClassloader = Thread.currentThread().getContextClassLoader();
@@ -498,8 +482,8 @@ public class PutHiveStreaming extends AbstractProcessor {
                                     appendRecordsToFlowFile(session, Collections.singletonList(record), failureFlowFile, failureAvroWriter, reader);
                                 }
 
-                                // If we've reached the records-per-transaction limit, flush the Hive Writer and update the Avro Writer for successful records
-                                if (hiveWriter.getTotalRecords() >= recordsPerTxn) {
+                                // If we've reached the transactions-per-batch limit, flush the Hive Writer and update the Avro Writer for successful records
+                                if (hiveWriter.getTotalRecords() >= txnsPerBatch) {
                                     hiveWriter.flush(true);
                                     // Now send the records to the success relationship and update the success count
                                     try {
@@ -666,15 +650,14 @@ public class PutHiveStreaming extends AbstractProcessor {
         callTimeoutPool.shutdown();
         try {
             while (!callTimeoutPool.isTerminated()) {
-                callTimeoutPool.awaitTermination(options.getCallTimeOut(), TimeUnit.MILLISECONDS);
+                callTimeoutPool.awaitTermination(
+                        options.getCallTimeOut(), TimeUnit.MILLISECONDS);
             }
         } catch (Throwable t) {
             log.warn("shutdown interrupted on " + callTimeoutPool, t);
         }
 
         callTimeoutPool = null;
-        ugi = null;
-        hiveConfigurator.stopRenewer();
     }
 
     private void setupHeartBeatTimer() {
@@ -843,7 +826,7 @@ public class PutHiveStreaming extends AbstractProcessor {
 
     protected HiveWriter makeHiveWriter(HiveEndPoint endPoint, ExecutorService callTimeoutPool, UserGroupInformation ugi, HiveOptions options)
             throws HiveWriter.ConnectFailure, InterruptedException {
-        return HiveUtils.makeHiveWriter(endPoint, callTimeoutPool, ugi, options, hiveConfig);
+        return HiveUtils.makeHiveWriter(endPoint, callTimeoutPool, ugi, options);
     }
 
     protected KerberosProperties getKerberosProperties() {

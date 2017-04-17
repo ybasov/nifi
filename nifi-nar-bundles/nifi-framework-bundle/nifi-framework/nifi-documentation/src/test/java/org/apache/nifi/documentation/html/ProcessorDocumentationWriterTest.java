@@ -21,7 +21,7 @@ import org.apache.nifi.documentation.DocumentationWriter;
 import org.apache.nifi.documentation.example.FullyDocumentedProcessor;
 import org.apache.nifi.documentation.example.NakedProcessor;
 import org.apache.nifi.documentation.example.ProcessorWithLogger;
-import org.apache.nifi.init.ProcessorInitializer;
+import org.apache.nifi.documentation.init.ProcessorInitializer;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -116,10 +116,8 @@ public class ProcessorDocumentationWriterTest {
         assertContains(results, "This processor has no relationships.");
 
         // state management
-        assertContains(results, "This component does not store state.");
+        assertContains(results, "This processor has no state management.");
 
-        // state management
-        assertContains(results, "This component is not restricted.");
     }
 
     @Test

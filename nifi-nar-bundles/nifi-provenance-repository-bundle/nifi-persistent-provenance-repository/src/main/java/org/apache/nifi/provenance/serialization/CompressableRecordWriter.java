@@ -17,18 +17,17 @@
 
 package org.apache.nifi.provenance.serialization;
 
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.nifi.provenance.AbstractRecordWriter;
 import org.apache.nifi.provenance.ProvenanceEventRecord;
 import org.apache.nifi.provenance.toc.TocWriter;
+import org.apache.nifi.stream.io.BufferedOutputStream;
 import org.apache.nifi.stream.io.ByteCountingOutputStream;
+import org.apache.nifi.stream.io.DataOutputStream;
 import org.apache.nifi.stream.io.GZIPOutputStream;
 import org.apache.nifi.stream.io.NonCloseableOutputStream;
 import org.slf4j.Logger;
@@ -41,16 +40,14 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
     private final ByteCountingOutputStream rawOutStream;
     private final boolean compressed;
     private final int uncompressedBlockSize;
-    private final AtomicLong idGenerator;
 
     private DataOutputStream out;
     private ByteCountingOutputStream byteCountingOut;
-    private long blockStartOffset = 0L;
+    private long lastBlockOffset = 0L;
     private int recordCount = 0;
 
 
-    public CompressableRecordWriter(final File file, final AtomicLong idGenerator, final TocWriter writer, final boolean compressed,
-        final int uncompressedBlockSize) throws IOException {
+    public CompressableRecordWriter(final File file, final TocWriter writer, final boolean compressed, final int uncompressedBlockSize) throws IOException {
         super(file, writer);
         logger.trace("Creating Record Writer for {}", file.getName());
 
@@ -58,24 +55,17 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
         this.fos = new FileOutputStream(file);
         rawOutStream = new ByteCountingOutputStream(fos);
         this.uncompressedBlockSize = uncompressedBlockSize;
-        this.idGenerator = idGenerator;
     }
 
-    public CompressableRecordWriter(final OutputStream out, final String storageLocation, final AtomicLong idGenerator, final TocWriter tocWriter, final boolean compressed,
-        final int uncompressedBlockSize) throws IOException {
-        super(storageLocation, tocWriter);
+    public CompressableRecordWriter(final OutputStream out, final TocWriter tocWriter, final boolean compressed, final int uncompressedBlockSize) throws IOException {
+        super(null, tocWriter);
         this.fos = null;
 
         this.compressed = compressed;
         this.uncompressedBlockSize = uncompressedBlockSize;
         this.rawOutStream = new ByteCountingOutputStream(out);
-        this.idGenerator = idGenerator;
     }
 
-
-    protected AtomicLong getIdGenerator() {
-        return idGenerator;
-    }
 
     @Override
     public synchronized void writeHeader(final long firstEventId) throws IOException {
@@ -84,13 +74,13 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
         }
 
         try {
-            blockStartOffset = rawOutStream.getBytesWritten();
+            lastBlockOffset = rawOutStream.getBytesWritten();
             resetWriteStream(firstEventId);
             out.writeUTF(getSerializationName());
             out.writeInt(getSerializationVersion());
             writeHeader(firstEventId, out);
             out.flush();
-            blockStartOffset = getBytesWritten();
+            lastBlockOffset = rawOutStream.getBytesWritten();
         } catch (final IOException ioe) {
             markDirty();
             throw ioe;
@@ -105,7 +95,7 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
      * @param eventId the first id that will be written to the new block
      * @throws IOException if unable to flush/close the current streams properly
      */
-    protected void resetWriteStream(final Long eventId) throws IOException {
+    private void resetWriteStream(final long eventId) throws IOException {
         try {
             if (out != null) {
                 out.flush();
@@ -124,13 +114,13 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
                     out.close();
                 }
 
-                if (tocWriter != null && eventId != null) {
+                if (tocWriter != null) {
                     tocWriter.addBlockOffset(rawOutStream.getBytesWritten(), eventId);
                 }
 
                 writableStream = new BufferedOutputStream(new GZIPOutputStream(new NonCloseableOutputStream(rawOutStream), 1), 65536);
             } else {
-                if (tocWriter != null && eventId != null) {
+                if (tocWriter != null) {
                     tocWriter.addBlockOffset(rawOutStream.getBytesWritten(), eventId);
                 }
 
@@ -146,34 +136,33 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
         }
     }
 
-    protected synchronized void ensureStreamState(final long recordIdentifier, final long startBytes) throws IOException {
-        // add a new block to the TOC if needed.
-        if (getTocWriter() != null && (startBytes - blockStartOffset >= uncompressedBlockSize)) {
-            blockStartOffset = startBytes;
-            resetWriteStream(recordIdentifier);
-        }
-    }
+
 
     @Override
-    public synchronized StorageSummary writeRecord(final ProvenanceEventRecord record) throws IOException {
+    public long writeRecord(final ProvenanceEventRecord record, final long recordIdentifier) throws IOException {
         if (isDirty()) {
             throw new IOException("Cannot update Provenance Repository because this Record Writer has already failed to write to the Repository");
         }
 
         try {
-            final long recordIdentifier = record.getEventId() == -1L ? idGenerator.getAndIncrement() : record.getEventId();
             final long startBytes = byteCountingOut.getBytesWritten();
 
-            ensureStreamState(recordIdentifier, startBytes);
+            // add a new block to the TOC if needed.
+            if (getTocWriter() != null && (startBytes - lastBlockOffset >= uncompressedBlockSize)) {
+                lastBlockOffset = startBytes;
+
+                if (compressed) {
+                    // because of the way that GZIPOutputStream works, we need to call close() on it in order for it
+                    // to write its trailing bytes. But we don't want to close the underlying OutputStream, so we wrap
+                    // the underlying OutputStream in a NonCloseableOutputStream
+                    resetWriteStream(recordIdentifier);
+                }
+            }
+
             writeRecord(record, recordIdentifier, out);
 
             recordCount++;
-            final long bytesWritten = byteCountingOut.getBytesWritten();
-            final long serializedLength = bytesWritten - startBytes;
-            final TocWriter tocWriter = getTocWriter();
-            final Integer blockIndex = tocWriter == null ? null : tocWriter.getCurrentBlockIndex();
-            final String storageLocation = getStorageLocation();
-            return new StorageSummary(recordIdentifier, storageLocation, blockIndex, serializedLength, bytesWritten);
+            return byteCountingOut.getBytesWritten() - startBytes;
         } catch (final IOException ioe) {
             markDirty();
             throw ioe;
@@ -181,12 +170,7 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
     }
 
     @Override
-    public synchronized long getBytesWritten() {
-        return byteCountingOut == null ? 0L : byteCountingOut.getBytesWritten();
-    }
-
-    @Override
-    public synchronized void flush() throws IOException {
+    public void flush() throws IOException {
         out.flush();
     }
 
@@ -196,24 +180,20 @@ public abstract class CompressableRecordWriter extends AbstractRecordWriter {
     }
 
     @Override
-    protected synchronized DataOutputStream getBufferedOutputStream() {
+    protected OutputStream getBufferedOutputStream() {
         return out;
     }
 
     @Override
-    protected synchronized OutputStream getUnderlyingOutputStream() {
+    protected OutputStream getUnderlyingOutputStream() {
         return fos;
     }
 
     @Override
-    protected synchronized void syncUnderlyingOutputStream() throws IOException {
+    protected void syncUnderlyingOutputStream() throws IOException {
         if (fos != null) {
             fos.getFD().sync();
         }
-    }
-
-    protected boolean isCompressed() {
-        return compressed;
     }
 
     protected abstract void writeRecord(final ProvenanceEventRecord event, final long eventId, final DataOutputStream out) throws IOException;

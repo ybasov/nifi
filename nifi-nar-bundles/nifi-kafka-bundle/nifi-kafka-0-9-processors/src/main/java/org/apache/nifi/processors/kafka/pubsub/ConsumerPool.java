@@ -22,7 +22,6 @@ import org.apache.nifi.logging.ComponentLog;
 
 import java.io.Closeable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -126,11 +125,6 @@ public class ConsumerPool implements Closeable {
         lease.setProcessSession(session);
         leasesObtainedCountRef.incrementAndGet();
         return lease;
-    }
-
-    public void retainConsumers() {
-        Arrays.stream(pooledLeases.toArray(new ConsumerLease[]{}))
-                .forEach(ConsumerLease::retainConnection);
     }
 
     /**

@@ -15,40 +15,12 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf */
 
 /**
  * Views state for a given component.
  */
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'Slick',
-                'nf.ClusterSummary',
-                'nf.ErrorHandler',
-                'nf.Dialog',
-                'nf.Common'],
-            function ($, Slick, nfClusterSummary, nfErrorHandler, nfDialog, nfCommon) {
-                return (nf.ComponentState = factory($, Slick, nfClusterSummary, nfErrorHandler, nfDialog, nfCommon));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.ComponentState =
-            factory(require('jquery'),
-                require('Slick'),
-                require('nf.ClusterSummary'),
-                require('nf.ErrorHandler'),
-                require('nf.Dialog'),
-                require('nf.Common')));
-    } else {
-        nf.ComponentState = factory(root.$,
-            root.Slick,
-            root.nf.ClusterSummary,
-            root.nf.ErrorHandler,
-            root.nf.Dialog,
-            root.nf.Common);
-    }
-}(this, function ($, Slick, nfClusterSummary, nfErrorHandler, nfDialog, nfCommon) {
-    'use strict';
+nf.ComponentState = (function () {
 
     /**
      * Filters the component state table.
@@ -58,7 +30,7 @@
         var componentStateTable = $('#component-state-table').data('gridInstance');
 
         // ensure the grid has been initialized
-        if (nfCommon.isDefinedAndNotNull(componentStateTable)) {
+        if (nf.Common.isDefinedAndNotNull(componentStateTable)) {
             var componentStateData = componentStateTable.getData();
 
             // update the search criteria
@@ -95,7 +67,7 @@
 
         // conditionally consider the scope
         var matchesScope = false;
-        if (nfCommon.isDefinedAndNotNull(item['scope'])) {
+        if (nf.Common.isDefinedAndNotNull(item['scope'])) {
             matchesScope = item['scope'].search(filterExp) >= 0;
         }
 
@@ -111,8 +83,8 @@
     var sort = function (sortDetails, data) {
         // defines a function for sorting
         var comparer = function (a, b) {
-            var aString = nfCommon.isDefinedAndNotNull(a[sortDetails.columnId]) ? a[sortDetails.columnId] : '';
-            var bString = nfCommon.isDefinedAndNotNull(b[sortDetails.columnId]) ? b[sortDetails.columnId] : '';
+            var aString = nf.Common.isDefinedAndNotNull(a[sortDetails.columnId]) ? a[sortDetails.columnId] : '';
+            var bString = nf.Common.isDefinedAndNotNull(b[sortDetails.columnId]) ? b[sortDetails.columnId] : '';
             return aString === bString ? 0 : aString > bString ? 1 : -1;
         };
 
@@ -162,7 +134,7 @@
         componentStateData.beginUpdate();
 
         // local state
-        if (nfCommon.isDefinedAndNotNull(localState)) {
+        if (nf.Common.isDefinedAndNotNull(localState)) {
             $.each(localState.state, function (i, stateEntry) {
                 componentStateData.addItem($.extend({
                     id: count++,
@@ -171,12 +143,12 @@
             });
             totalEntries += localState.totalEntryCount;
 
-            if (nfCommon.isDefinedAndNotNull(localState.state) && localState.totalEntryCount !== localState.state.length) {
+            if (nf.Common.isDefinedAndNotNull(localState.state) && localState.totalEntryCount !== localState.state.length) {
                 showPartialDetails = true;
             }
         }
 
-        if (nfCommon.isDefinedAndNotNull(clusterState)) {
+        if (nf.Common.isDefinedAndNotNull(clusterState)) {
             $.each(clusterState.state, function (i, stateEntry) {
                 componentStateData.addItem($.extend({
                     id: count++,
@@ -185,7 +157,7 @@
             });
             totalEntries += clusterState.totalEntryCount;
 
-            if (nfCommon.isDefinedAndNotNull(clusterState.state) && clusterState.totalEntryCount !== clusterState.state.length) {
+            if (nf.Common.isDefinedAndNotNull(clusterState.state) && clusterState.totalEntryCount !== clusterState.state.length) {
                 showPartialDetails = true;
             }
         }
@@ -199,7 +171,7 @@
         }
 
         // update the total number of state entries
-        $('#total-component-state-entries').text(nfCommon.formatInteger(totalEntries));
+        $('#total-component-state-entries').text(nf.Common.formatInteger(totalEntries));
     };
 
     /**
@@ -281,9 +253,9 @@
 
                             // reload the table with no state
                             loadComponentState()
-                        }).fail(nfErrorHandler.handleAjaxError);
+                        }).fail(nf.Common.handleAjaxError);
                     } else {
-                        nfDialog.showOkDialog({
+                        nf.Dialog.showOkDialog({
                             headerText: 'Component State',
                             dialogContent: 'This component has no state to clear.'
                         });
@@ -293,24 +265,12 @@
 
             // initialize the queue listing table
             var componentStateColumns = [
-                {
-                    id: 'key',
-                    field: 'key',
-                    name: 'Key',
-                    sortable: true,
-                    resizable: true
-                },
-                {
-                    id: 'value',
-                    field: 'value',
-                    name: 'Value',
-                    sortable: true,
-                    resizable: true
-                }
+                {id: 'key', field: 'key', name: 'Key', sortable: true, resizable: true},
+                {id: 'value', field: 'value', name: 'Value', sortable: true, resizable: true}
             ];
 
             // conditionally show the cluster node identifier
-            if (nfClusterSummary.isClustered()) {
+            if (nf.Canvas.isClustered()) {
                 componentStateColumns.push({
                     id: 'scope',
                     field: 'scope',
@@ -418,7 +378,7 @@
                 // reset the grid size
                 var componentStateGrid = componentStateTable.data('gridInstance');
                 componentStateGrid.resizeCanvas();
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         }
     };
-}));
+}());

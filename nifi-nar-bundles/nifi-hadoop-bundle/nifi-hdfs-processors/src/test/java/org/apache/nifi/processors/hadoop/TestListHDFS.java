@@ -43,7 +43,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -52,8 +51,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
@@ -102,23 +99,6 @@ public class TestListHDFS {
         final MockFlowFile mff = runner.getFlowFilesForRelationship(ListHDFS.REL_SUCCESS).get(0);
         mff.assertAttributeEquals("path", "/test");
         mff.assertAttributeEquals("filename", "testFile.txt");
-    }
-
-    @Test
-    public void testListingWithFilter() throws InterruptedException {
-        proc.fileSystem.addFileStatus(new Path("/test"), new FileStatus(1L, false, 1, 1L, 0L, 0L, create777(), "owner", "group", new Path("/test/testFile.txt")));
-
-        runner.setProperty(ListHDFS.DIRECTORY, "${literal('/test'):substring(0,5)}");
-        runner.setProperty(ListHDFS.FILE_FILTER, "[^test].*");
-
-        // first iteration will not pick up files because it has to instead check timestamps.
-        // We must then wait long enough to ensure that the listing can be performed safely and
-        // run the Processor again.
-        runner.run();
-        Thread.sleep(TimeUnit.NANOSECONDS.toMillis(2 * ListHDFS.LISTING_LAG_NANOS));
-        runner.run();
-
-        runner.assertAllFlowFilesTransferred(ListHDFS.REL_SUCCESS, 0);
     }
 
     @Test
@@ -487,23 +467,6 @@ public class TestListHDFS {
             verifyNotFail();
             values.remove(key);
             return true;
-        }
-
-        @Override
-        public long removeByPattern(String regex) throws IOException {
-            verifyNotFail();
-            final List<Object> removedRecords = new ArrayList<>();
-            Pattern p = Pattern.compile(regex);
-            for (Object key : values.keySet()) {
-                // Key must be backed by something that array() returns a byte[] that can be converted into a String via the default charset
-                Matcher m = p.matcher(key.toString());
-                if (m.matches()) {
-                    removedRecords.add(values.get(key));
-                }
-            }
-            final long numRemoved = removedRecords.size();
-            removedRecords.forEach(values::remove);
-            return numRemoved;
         }
     }
 }

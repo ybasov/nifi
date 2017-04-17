@@ -15,137 +15,102 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'nf.Client',
-                'nf.Birdseye',
-                'nf.Graph',
-                'nf.CanvasUtils',
-                'nf.ErrorHandler'],
-            function ($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler) {
-                return (nf.ng.FunnelComponent = factory($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.ng.FunnelComponent =
-            factory(require('jquery'),
-                require('nf.Client'),
-                require('nf.Birdseye'),
-                require('nf.Graph'),
-                require('nf.CanvasUtils'),
-                require('nf.ErrorHandler')));
-    } else {
-        nf.ng.FunnelComponent = factory(root.$,
-            root.nf.Client,
-            root.nf.Birdseye,
-            root.nf.Graph,
-            root.nf.CanvasUtils,
-            root.nf.ErrorHandler);
-    }
-}(this, function ($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler) {
+nf.ng.FunnelComponent = function (serviceProvider) {
     'use strict';
 
-    return function (serviceProvider) {
-        'use strict';
+    function FunnelComponent() {
+        this.icon = 'icon icon-funnel';
 
-        function FunnelComponent() {
-            this.icon = 'icon icon-funnel';
+        this.hoverIcon = 'icon icon-funnel-add';
+    }
+    FunnelComponent.prototype = {
+        constructor: FunnelComponent,
 
-            this.hoverIcon = 'icon icon-funnel-add';
-        }
+        /**
+         * Gets the component.
+         *
+         * @returns {*|jQuery|HTMLElement}
+         */
+        getElement: function() {
+            return $('#funnel-component');
+        },
 
-        FunnelComponent.prototype = {
-            constructor: FunnelComponent,
+        /**
+         * Enable the component.
+         */
+        enabled: function() {
+            this.getElement().attr('disabled', false);
+        },
 
-            /**
-             * Gets the component.
-             *
-             * @returns {*|jQuery|HTMLElement}
-             */
-            getElement: function () {
-                return $('#funnel-component');
-            },
+        /**
+         * Disable the component.
+         */
+        disabled: function() {
+            this.getElement().attr('disabled', true);
+        },
 
-            /**
-             * Enable the component.
-             */
-            enabled: function () {
-                this.getElement().attr('disabled', false);
-            },
+        /**
+         * Handler function for when component is dropped on the canvas.
+         *
+         * @argument {object} pt        The point that the component was dropped.
+         */
+        dropHandler: function(pt) {
+            this.createFunnel(pt);
+        },
 
-            /**
-             * Disable the component.
-             */
-            disabled: function () {
-                this.getElement().attr('disabled', true);
-            },
+        /**
+         * The drag icon for the toolbox component.
+         *
+         * @param event
+         * @returns {*|jQuery|HTMLElement}
+         */
+        dragIcon: function (event) {
+            return $('<div class="icon icon-funnel-add"></div>');
+        },
 
-            /**
-             * Handler function for when component is dropped on the canvas.
-             *
-             * @argument {object} pt        The point that the component was dropped.
-             */
-            dropHandler: function (pt) {
-                this.createFunnel(pt);
-            },
-
-            /**
-             * The drag icon for the toolbox component.
-             *
-             * @param event
-             * @returns {*|jQuery|HTMLElement}
-             */
-            dragIcon: function (event) {
-                return $('<div class="icon icon-funnel-add"></div>');
-            },
-
-            /**
-             * Creates a new funnel at the specified point.
-             *
-             * @argument {object} pt        The point that the funnel was dropped.
-             */
-            createFunnel: function (pt) {
-                var outputPortEntity = {
-                    'revision': nfClient.getRevision({
-                        'revision': {
-                            'version': 0
-                        }
-                    }),
-                    'component': {
-                        'position': {
-                            'x': pt.x,
-                            'y': pt.y
-                        }
+        /**
+         * Creates a new funnel at the specified point.
+         *
+         * @argument {object} pt        The point that the funnel was dropped.
+         */
+        createFunnel: function(pt) {
+            var outputPortEntity = {
+                'revision': nf.Client.getRevision({
+                    'revision': {
+                        'version': 0
                     }
-                };
+                }),
+                'component': {
+                    'position': {
+                        'x': pt.x,
+                        'y': pt.y
+                    }
+                }
+            };
 
-                // create a new funnel
-                $.ajax({
-                    type: 'POST',
-                    url: serviceProvider.headerCtrl.toolboxCtrl.config.urls.api + '/process-groups/' + encodeURIComponent(nfCanvasUtils.getGroupId()) + '/funnels',
-                    data: JSON.stringify(outputPortEntity),
-                    dataType: 'json',
-                    contentType: 'application/json'
-                }).done(function (response) {
-                    // add the funnel to the graph
-                    nfGraph.add({
-                        'funnels': [response]
-                    }, {
-                        'selectAll': true
-                    });
+            // create a new funnel
+            $.ajax({
+                type: 'POST',
+                url: serviceProvider.headerCtrl.toolboxCtrl.config.urls.api + '/process-groups/' + encodeURIComponent(nf.Canvas.getGroupId()) + '/funnels',
+                data: JSON.stringify(outputPortEntity),
+                dataType: 'json',
+                contentType: 'application/json'
+            }).done(function (response) {
+                // add the funnel to the graph
+                nf.Graph.add({
+                    'funnels': [response]
+                }, {
+                    'selectAll': true
+                });
 
-                    // update component visibility
-                    nfGraph.updateVisibility();
-
-                    // update the birdseye
-                    nfBirdseye.refresh();
-                }).fail(nfErrorHandler.handleAjaxError);
-            }
+                // update the birdseye
+                nf.Birdseye.refresh();
+            }).fail(nf.Common.handleAjaxError);
         }
+    }
 
-        var funnelComponent = new FunnelComponent();
-        return funnelComponent;
-    };
-}));
+    var funnelComponent = new FunnelComponent();
+    return funnelComponent;
+};

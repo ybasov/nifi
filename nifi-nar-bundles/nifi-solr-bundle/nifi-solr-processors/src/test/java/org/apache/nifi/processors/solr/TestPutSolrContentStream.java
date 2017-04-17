@@ -393,35 +393,6 @@ public class TestPutSolrContentStream {
     }
 
     @Test
-    public void testUsernamePasswordValidation() {
-        final TestRunner runner = TestRunners.newTestRunner(PutSolrContentStream.class);
-        runner.setProperty(PutSolrContentStream.SOLR_TYPE, PutSolrContentStream.SOLR_TYPE_STANDARD.getValue());
-        runner.setProperty(PutSolrContentStream.SOLR_LOCATION, "http://localhost:8443/solr");
-        runner.assertValid();
-
-        runner.setProperty(PutSolrContentStream.BASIC_USERNAME, "user1");
-        runner.assertNotValid();
-
-        runner.setProperty(PutSolrContentStream.BASIC_PASSWORD, "password");
-        runner.assertValid();
-
-        runner.setProperty(PutSolrContentStream.BASIC_USERNAME, "");
-        runner.assertNotValid();
-
-        runner.setProperty(PutSolrContentStream.BASIC_USERNAME, "${solr.user}");
-        runner.assertNotValid();
-
-        runner.setVariable("solr.user", "solrRocks");
-        runner.assertValid();
-
-        runner.setProperty(PutSolrContentStream.BASIC_PASSWORD, "${solr.password}");
-        runner.assertNotValid();
-
-        runner.setVariable("solr.password", "solrRocksPassword");
-        runner.assertValid();
-    }
-
-    @Test
     public void testJAASClientAppNameValidation() {
         final TestRunner runner = TestRunners.newTestRunner(PutSolrContentStream.class);
         runner.setProperty(PutSolrContentStream.SOLR_TYPE, PutSolrContentStream.SOLR_TYPE_STANDARD.getValue());
@@ -521,7 +492,7 @@ public class TestPutSolrContentStream {
         }
 
         @Override
-        protected SolrClient createSolrClient(ProcessContext context, String solrLocation) {
+        protected SolrClient createSolrClient(ProcessContext context) {
             mockSolrClient = new SolrClient() {
                 @Override
                 public NamedList<Object> request(SolrRequest solrRequest, String s) throws SolrServerException, IOException {
@@ -551,7 +522,7 @@ public class TestPutSolrContentStream {
         }
 
         @Override
-        protected SolrClient createSolrClient(ProcessContext context, String solrLocation) {
+        protected SolrClient createSolrClient(ProcessContext context) {
             mockSolrClient = Mockito.mock(SolrClient.class);
             try {
                 when(mockSolrClient.request(any(SolrRequest.class),
@@ -574,7 +545,7 @@ public class TestPutSolrContentStream {
             this.solrClient = solrClient;
         }
         @Override
-        protected SolrClient createSolrClient(ProcessContext context, String solrLocation) {
+        protected SolrClient createSolrClient(ProcessContext context) {
             return solrClient;
         }
     }

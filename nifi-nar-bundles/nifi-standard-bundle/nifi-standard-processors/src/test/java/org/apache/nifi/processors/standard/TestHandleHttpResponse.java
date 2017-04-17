@@ -39,7 +39,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.nifi.controller.AbstractControllerService;
 import org.apache.nifi.http.HttpContextMap;
 import org.apache.nifi.processor.exception.FlowFileAccessException;
-import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processors.standard.util.HTTPUtils;
 import org.apache.nifi.provenance.ProvenanceEventType;
 import org.apache.nifi.reporting.InitializationException;
@@ -57,7 +56,7 @@ public class TestHandleHttpResponse {
     public void testEnsureCompleted() throws InitializationException {
         final TestRunner runner = TestRunners.newTestRunner(HandleHttpResponse.class);
 
-        final MockHttpContextMap contextMap = new MockHttpContextMap("my-id", "");
+        final MockHttpContextMap contextMap = new MockHttpContextMap("my-id", false);
         runner.addControllerService("http-context-map", contextMap);
         runner.enableControllerService(contextMap);
         runner.setProperty(HandleHttpResponse.HTTP_CONTEXT_MAP, "http-context-map");
@@ -96,7 +95,7 @@ public class TestHandleHttpResponse {
     public void testWithExceptionThrown() throws InitializationException {
         final TestRunner runner = TestRunners.newTestRunner(HandleHttpResponse.class);
 
-        final MockHttpContextMap contextMap = new MockHttpContextMap("my-id", "FlowFileAccessException");
+        final MockHttpContextMap contextMap = new MockHttpContextMap("my-id", true);
         runner.addControllerService("http-context-map", contextMap);
         runner.enableControllerService(contextMap);
         runner.setProperty(HandleHttpResponse.HTTP_CONTEXT_MAP, "http-context-map");
@@ -114,54 +113,6 @@ public class TestHandleHttpResponse {
         runner.run();
 
         runner.assertAllFlowFilesTransferred(HandleHttpResponse.REL_FAILURE, 1);
-        assertEquals(0, contextMap.getCompletionCount());
-    }
-
-    @Test
-    public void testCannotWriteResponse() throws InitializationException {
-        final TestRunner runner = TestRunners.newTestRunner(HandleHttpResponse.class);
-
-        final MockHttpContextMap contextMap = new MockHttpContextMap("my-id", "ProcessException");
-        runner.addControllerService("http-context-map", contextMap);
-        runner.enableControllerService(contextMap);
-        runner.setProperty(HandleHttpResponse.HTTP_CONTEXT_MAP, "http-context-map");
-        runner.setProperty(HandleHttpResponse.STATUS_CODE, "${status.code}");
-        runner.setProperty("my-attr", "${my-attr}");
-        runner.setProperty("no-valid-attr", "${no-valid-attr}");
-
-        final Map<String, String> attributes = new HashMap<>();
-        attributes.put(HTTPUtils.HTTP_CONTEXT_ID, "my-id");
-        attributes.put("my-attr", "hello");
-        attributes.put("status.code", "201");
-
-        runner.enqueue("hello".getBytes(), attributes);
-
-        runner.run();
-
-        runner.assertAllFlowFilesTransferred(HandleHttpResponse.REL_FAILURE, 1);
-        assertEquals(1, contextMap.getCompletionCount());
-    }
-
-    @Test
-    public void testStatusCodeEmpty() throws InitializationException {
-        final TestRunner runner = TestRunners.newTestRunner(HandleHttpResponse.class);
-
-        final MockHttpContextMap contextMap = new MockHttpContextMap("my-id", "");
-        runner.addControllerService("http-context-map", contextMap);
-        runner.enableControllerService(contextMap);
-        runner.setProperty(HandleHttpResponse.HTTP_CONTEXT_MAP, "http-context-map");
-        runner.setProperty(HandleHttpResponse.STATUS_CODE, "${status.code}");
-
-        final Map<String, String> attributes = new HashMap<>();
-        attributes.put(HTTPUtils.HTTP_CONTEXT_ID, "my-id");
-        attributes.put("my-attr", "hello");
-
-        runner.enqueue("hello".getBytes(), attributes);
-
-        runner.run();
-
-        runner.assertAllFlowFilesTransferred(HandleHttpResponse.REL_FAILURE, 1);
-        assertEquals(0, contextMap.getCompletionCount());
     }
 
     private static class MockHttpContextMap extends AbstractControllerService implements HttpContextMap {
@@ -170,14 +121,14 @@ public class TestHandleHttpResponse {
         private final AtomicInteger completedCount = new AtomicInteger(0);
         private final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         private final ConcurrentMap<String, String> headersSent = new ConcurrentHashMap<>();
-        private final String shouldThrowExceptionClass;
+        private final boolean shouldThrowException;
         private volatile int statusCode = -1;
 
         private final List<String> headersWithNoValue = new CopyOnWriteArrayList<>();
 
-        public MockHttpContextMap(final String expectedIdentifier, final String shouldThrowExceptionClass) {
+        public MockHttpContextMap(final String expectedIdentifier, final boolean shouldThrowException) {
             this.id = expectedIdentifier;
-            this.shouldThrowExceptionClass = shouldThrowExceptionClass;
+            this.shouldThrowException = shouldThrowException;
         }
 
         @Override
@@ -193,10 +144,8 @@ public class TestHandleHttpResponse {
 
             try {
                 final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
-                if(shouldThrowExceptionClass != null && shouldThrowExceptionClass.equals("FlowFileAccessException")) {
+                if(shouldThrowException) {
                     Mockito.when(response.getOutputStream()).thenThrow(new FlowFileAccessException("exception"));
-                } else if(shouldThrowExceptionClass != null && shouldThrowExceptionClass.equals("ProcessException")) {
-                        Mockito.when(response.getOutputStream()).thenThrow(new ProcessException("exception"));
                 } else {
                     Mockito.when(response.getOutputStream()).thenReturn(new ServletOutputStream() {
                         @Override

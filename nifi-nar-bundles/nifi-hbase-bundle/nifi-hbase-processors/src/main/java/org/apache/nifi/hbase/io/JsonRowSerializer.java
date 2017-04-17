@@ -23,18 +23,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.Charset;
 
-/**
- * Serializes a row from HBase to a JSON document of the form:
- *
- * {
- *  "row" : "row1",
- *  "cells": {
- *      "fam1:qual1" : "val1",
- *      "fam1:qual2" : "val2"
- *  }
- * }
- *
- */
 public class JsonRowSerializer implements RowSerializer {
 
     private final Charset charset;
@@ -44,7 +32,7 @@ public class JsonRowSerializer implements RowSerializer {
     }
 
     @Override
-    public String serialize(byte[] rowKey, ResultCell[] cells) {
+    public void serialize(final byte[] rowKey, final ResultCell[] cells, final OutputStream out) throws IOException {
         final StringBuilder jsonBuilder = new StringBuilder();
         jsonBuilder.append("{");
 
@@ -74,12 +62,7 @@ public class JsonRowSerializer implements RowSerializer {
         }
 
         jsonBuilder.append("}}");
-        return jsonBuilder.toString();
-    }
-
-    @Override
-    public void serialize(final byte[] rowKey, final ResultCell[] cells, final OutputStream out) throws IOException {
-        final String json = serialize(rowKey, cells);
+        final String json = jsonBuilder.toString();
         out.write(json.getBytes(charset));
     }
 

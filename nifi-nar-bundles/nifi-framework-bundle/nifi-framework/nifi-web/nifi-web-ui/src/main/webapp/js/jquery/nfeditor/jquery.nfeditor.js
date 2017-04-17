@@ -15,26 +15,27 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global CodeMirror, nf */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'CodeMirror',
-                'nf'],
-            function ($, CodeMirror, nf) {
-                factory($, CodeMirror, nf);
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        factory(require('jquery'),
-            require('CodeMirror'),
-            require('nf'));
-    } else {
-        factory(root.$,
-            root.CodeMirror,
-            root.nf);
-    }
-}(this, function ($, CodeMirror, nf) {
+/**
+ * Create a new nf editor. The options are specified in the following
+ * format:
+ *
+ * {
+ *   languageId: 'nfel',
+ *   resizable: true,
+ *   sensitive: false,
+ *   readOnly: false,
+ *   content: '${attribute}',
+ *   width: 200,
+ *   height: 200,
+ *   minWidth: 150,
+ *   minHeight: 150
+ * }
+ * 
+ * @param {type} $
+ */
+(function ($) {
 
     var isUndefined = function (obj) {
         return typeof obj === 'undefined';
@@ -57,23 +58,10 @@
     };
 
     var methods = {
-
+        
         /**
-         * Create a new nf editor. The options are specified in the following
-         * format:
-         *
-         * {
-         *   languageId: 'nfel',
-         *   resizable: true,
-         *   sensitive: false,
-         *   readOnly: false,
-         *   content: '${attribute}',
-         *   width: 200,
-         *   height: 200,
-         *   minWidth: 150,
-         *   minHeight: 150
-         * }
-         *
+         * Initializes the nf editor.
+         * 
          * @param {object} options  The options for this editor.
          */
         init: function (options) {
@@ -130,7 +118,7 @@
                             }
                         }
                     });
-
+                    
                     // set the size
                     var width = null;
                     if (isDefinedAndNotNull(options.width)) {
@@ -204,7 +192,7 @@
                 }
             });
         },
-
+        
         /**
          * Refreshes the editor.
          */
@@ -218,10 +206,10 @@
                 }
             });
         },
-
+        
         /**
          * Sets the size of the editor.
-         *
+         * 
          * @param {integer} width
          * @param {integer} height
          */
@@ -235,7 +223,7 @@
                 }
             });
         },
-
+        
         /**
          * Gets the value of the editor in the first matching selector.
          */
@@ -255,10 +243,10 @@
 
             return value;
         },
-
+        
         /**
          * Sets the value of the editor.
-         *
+         * 
          * @param {string} value
          */
         setValue: function (value) {
@@ -274,7 +262,7 @@
                 }
             });
         },
-
+        
         /**
          * Sets the focus.
          */
@@ -288,7 +276,7 @@
                 }
             });
         },
-
+        
         /**
          * Sets the focus.
          */
@@ -302,7 +290,7 @@
                 }
             });
         },
-
+        
         /**
          * Gets whether the value of the editor in the first matching selector has been modified.
          */
@@ -316,7 +304,7 @@
 
             return modified;
         },
-
+        
         /**
          * Destroys the editor.
          */
@@ -332,4 +320,4 @@
             return methods.init.apply(this, arguments);
         }
     };
-}));
+})(jQuery);

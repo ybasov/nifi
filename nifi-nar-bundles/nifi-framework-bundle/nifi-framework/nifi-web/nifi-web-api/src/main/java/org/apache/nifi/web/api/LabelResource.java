@@ -30,7 +30,6 @@ import org.apache.nifi.authorization.user.NiFiUserUtils;
 import org.apache.nifi.web.NiFiServiceFacade;
 import org.apache.nifi.web.Revision;
 import org.apache.nifi.web.api.dto.LabelDTO;
-import org.apache.nifi.web.api.dto.PositionDTO;
 import org.apache.nifi.web.api.entity.LabelEntity;
 import org.apache.nifi.web.api.request.ClientIdParameter;
 import org.apache.nifi.web.api.request.LongParameter;
@@ -193,13 +192,6 @@ public class LabelResource extends ApplicationResource {
                     + "label id of the requested resource (%s).", requestLabelDTO.getId(), id));
         }
 
-        final PositionDTO proposedPosition = requestLabelDTO.getPosition();
-        if (proposedPosition != null) {
-            if (proposedPosition.getX() == null || proposedPosition.getY() == null) {
-                throw new IllegalArgumentException("The x and y coordinate of the proposed position must be specified.");
-            }
-        }
-
         if (isReplicateRequest()) {
             return replicate(HttpMethod.PUT, requestLabelEntity);
         }
@@ -244,8 +236,7 @@ public class LabelResource extends ApplicationResource {
             value = "Deletes a label",
             response = LabelEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /labels/{uuid}", type = ""),
-                    @Authorization(value = "Write - Parent Process Group - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /labels/{uuid}", type = "")
             }
     )
     @ApiResponses(
@@ -290,12 +281,7 @@ public class LabelResource extends ApplicationResource {
                 requestRevision,
                 lookup -> {
                     final Authorizable label = lookup.getLabel(id);
-
-                    // ensure write permission to the label
                     label.authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
-
-                    // ensure write permission to the parent process group
-                    label.getParentAuthorizable().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
                 },
                 null,
                 (revision, labelEntity) -> {

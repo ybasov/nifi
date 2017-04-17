@@ -50,7 +50,6 @@ import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
-import org.apache.nifi.flowfile.attributes.FragmentAttributes;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -78,10 +77,10 @@ import org.apache.nifi.util.Tuple;
 public class SplitContent extends AbstractProcessor {
 
     // attribute keys
-    public static final String FRAGMENT_ID = FragmentAttributes.FRAGMENT_ID.key();
-    public static final String FRAGMENT_INDEX = FragmentAttributes.FRAGMENT_INDEX.key();
-    public static final String FRAGMENT_COUNT = FragmentAttributes.FRAGMENT_COUNT.key();
-    public static final String SEGMENT_ORIGINAL_FILENAME = FragmentAttributes.SEGMENT_ORIGINAL_FILENAME.key();
+    public static final String FRAGMENT_ID = "fragment.identifier";
+    public static final String FRAGMENT_INDEX = "fragment.index";
+    public static final String FRAGMENT_COUNT = "fragment.count";
+    public static final String SEGMENT_ORIGINAL_FILENAME = "segment.original.filename";
 
     static final AllowableValue HEX_FORMAT = new AllowableValue("Hexadecimal", "Hexadecimal", "The Byte Sequence will be interpreted as a hexadecimal representation of bytes");
     static final AllowableValue UTF8_FORMAT = new AllowableValue("Text", "Text", "The Byte Sequence will be interpreted as UTF-8 Encoded text");
@@ -183,7 +182,7 @@ public class SplitContent extends AbstractProcessor {
 
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) {
-        FlowFile flowFile = session.get();
+        final FlowFile flowFile = session.get();
         if (flowFile == null) {
             return;
         }
@@ -286,9 +285,8 @@ public class SplitContent extends AbstractProcessor {
             splitList.add(finalSplit);
         }
 
-        final String fragmentId = finishFragmentAttributes(session, flowFile, splitList);
+        finishFragmentAttributes(session, flowFile, splitList);
         session.transfer(splitList, REL_SPLITS);
-        flowFile = FragmentAttributes.copyAttributesToOriginal(session, flowFile, fragmentId, splitList.size());
         session.transfer(flowFile, REL_ORIGINAL);
 
         if (splitList.size() > 10) {
@@ -304,9 +302,8 @@ public class SplitContent extends AbstractProcessor {
      * @param session session
      * @param source source
      * @param splits splits
-     * @return generated fragment identifier for the splits
      */
-    private String finishFragmentAttributes(final ProcessSession session, final FlowFile source, final List<FlowFile> splits) {
+    private void finishFragmentAttributes(final ProcessSession session, final FlowFile source, final List<FlowFile> splits) {
         final String originalFilename = source.getAttribute(CoreAttributes.FILENAME.key());
 
         final String fragmentId = UUID.randomUUID().toString();
@@ -322,7 +319,6 @@ public class SplitContent extends AbstractProcessor {
             FlowFile newFF = session.putAllAttributes(ff, attributes);
             splits.add(newFF);
         }
-        return fragmentId;
     }
 
     static class HexStringPropertyValidator implements Validator {

@@ -65,17 +65,12 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.node.ArrayNode;
 import org.codehaus.jackson.node.JsonNodeFactory;
 
-import static org.apache.nifi.flowfile.attributes.FragmentAttributes.FRAGMENT_COUNT;
-import static org.apache.nifi.flowfile.attributes.FragmentAttributes.FRAGMENT_ID;
-import static org.apache.nifi.flowfile.attributes.FragmentAttributes.FRAGMENT_INDEX;
-import static org.apache.nifi.flowfile.attributes.FragmentAttributes.copyAttributesToOriginal;
-
 @SideEffectFree
 @SupportsBatching
 @SeeAlso(PutSQL.class)
 @InputRequirement(Requirement.INPUT_REQUIRED)
-@Tags({"json", "sql", "database", "rdbms", "insert", "update", "delete", "relational", "flat"})
-@CapabilityDescription("Converts a JSON-formatted FlowFile into an UPDATE, INSERT, or DELETE SQL statement. The incoming FlowFile is expected to be "
+@Tags({"json", "sql", "database", "rdbms", "insert", "update", "relational", "flat"})
+@CapabilityDescription("Converts a JSON-formatted FlowFile into an UPDATE or INSERT SQL statement. The incoming FlowFile is expected to be "
         + "\"flat\" JSON message, meaning that it consists of a single JSON element and each field maps to a simple type. If a field maps to "
         + "a JSON object, that JSON object will be interpreted as Text. If the input is an array of JSON elements, each element in the array is "
         + "output as a separate FlowFile to the 'sql' relationship. Upon successful conversion, the original FlowFile is routed to the 'original' "
@@ -102,7 +97,6 @@ import static org.apache.nifi.flowfile.attributes.FragmentAttributes.copyAttribu
 public class ConvertJSONToSQL extends AbstractProcessor {
     private static final String UPDATE_TYPE = "UPDATE";
     private static final String INSERT_TYPE = "INSERT";
-    private static final String DELETE_TYPE = "DELETE";
 
     static final AllowableValue IGNORE_UNMATCHED_FIELD = new AllowableValue("Ignore Unmatched Fields", "Ignore Unmatched Fields",
             "Any field in the JSON document that cannot be mapped to a column in the database is ignored");
@@ -129,7 +123,7 @@ public class ConvertJSONToSQL extends AbstractProcessor {
             .name("Statement Type")
             .description("Specifies the type of SQL Statement to generate")
             .required(true)
-            .allowableValues(UPDATE_TYPE, INSERT_TYPE, DELETE_TYPE)
+            .allowableValues(UPDATE_TYPE, INSERT_TYPE)
             .build();
     static final PropertyDescriptor TABLE_NAME = new PropertyDescriptor.Builder()
             .name("Table Name")
@@ -184,18 +178,9 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
     static final PropertyDescriptor QUOTED_IDENTIFIERS = new PropertyDescriptor.Builder()
             .name("jts-quoted-identifiers")
-            .displayName("Quote Column Identifiers")
+            .displayName("Quote Identifiers")
             .description("Enabling this option will cause all column names to be quoted, allowing you to "
                     + "use reserved words as column names in your tables.")
-            .allowableValues("true", "false")
-            .defaultValue("false")
-            .build();
-
-    static final PropertyDescriptor QUOTED_TABLE_IDENTIFIER = new PropertyDescriptor.Builder()
-            .name("jts-quoted-table-identifiers")
-            .displayName("Quote Table Identifiers")
-            .description("Enabling this option will cause the table name to be quoted to support the "
-                    + "use of special characters in the table name")
             .allowableValues("true", "false")
             .defaultValue("false")
             .build();
@@ -236,7 +221,6 @@ public class ConvertJSONToSQL extends AbstractProcessor {
         properties.add(UNMATCHED_COLUMN_BEHAVIOR);
         properties.add(UPDATE_KEY);
         properties.add(QUOTED_IDENTIFIERS);
-        properties.add(QUOTED_TABLE_IDENTIFIER);
         return properties;
     }
 
@@ -282,9 +266,6 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
         //Escape column names?
         final boolean escapeColumnNames = context.getProperty(QUOTED_IDENTIFIERS).asBoolean();
-
-        // Quote table name?
-        final boolean quoteTableName = context.getProperty(QUOTED_TABLE_IDENTIFIER).asBoolean();
 
         // get the database schema from the cache, if one exists. We do this in a synchronized block, rather than
         // using a ConcurrentMap because the Map that we are using is a LinkedHashMap with a capacity such that if
@@ -363,13 +344,10 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
                 if (INSERT_TYPE.equals(statementType)) {
                     sql = generateInsert(jsonNode, attributes, fqTableName, schema, translateFieldNames, ignoreUnmappedFields,
-                            failUnmappedColumns, warningUnmappedColumns, escapeColumnNames, quoteTableName);
-                } else if (UPDATE_TYPE.equals(statementType)) {
-                    sql = generateUpdate(jsonNode, attributes, fqTableName, updateKeys, schema, translateFieldNames, ignoreUnmappedFields,
-                            failUnmappedColumns, warningUnmappedColumns, escapeColumnNames, quoteTableName);
+                            failUnmappedColumns, warningUnmappedColumns, escapeColumnNames);
                 } else {
-                    sql = generateDelete(jsonNode, attributes, fqTableName, schema, translateFieldNames, ignoreUnmappedFields,
-                            failUnmappedColumns, warningUnmappedColumns, escapeColumnNames, quoteTableName);
+                    sql = generateUpdate(jsonNode, attributes, fqTableName, updateKeys, schema, translateFieldNames, ignoreUnmappedFields,
+                            failUnmappedColumns, warningUnmappedColumns, escapeColumnNames);
                 }
             } catch (final ProcessException pe) {
                 getLogger().error("Failed to convert {} to a SQL {} statement due to {}; routing to failure",
@@ -391,9 +369,9 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
             attributes.put(CoreAttributes.MIME_TYPE.key(), "text/plain");
             attributes.put("sql.table", tableName);
-            attributes.put(FRAGMENT_ID.key(), fragmentIdentifier);
-            attributes.put(FRAGMENT_COUNT.key(), String.valueOf(arrayNode.size()));
-            attributes.put(FRAGMENT_INDEX.key(), String.valueOf(i));
+            attributes.put("fragment.identifier", fragmentIdentifier);
+            attributes.put("fragment.count", String.valueOf(arrayNode.size()));
+            attributes.put("fragment.index", String.valueOf(i));
 
             if (catalog != null) {
                 attributes.put("sql.catalog", catalog);
@@ -403,7 +381,6 @@ public class ConvertJSONToSQL extends AbstractProcessor {
             session.transfer(sqlFlowFile, REL_SQL);
         }
 
-        flowFile = copyAttributesToOriginal(session, flowFile, fragmentIdentifier, arrayNode.size());
         session.transfer(flowFile, REL_ORIGINAL);
     }
 
@@ -419,7 +396,7 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
     private String generateInsert(final JsonNode rootNode, final Map<String, String> attributes, final String tableName,
                                   final TableSchema schema, final boolean translateFieldNames, final boolean ignoreUnmappedFields, final boolean failUnmappedColumns,
-                                  final boolean warningUnmappedColumns, boolean escapeColumnNames, boolean quoteTableName) {
+                                  final boolean warningUnmappedColumns, boolean escapeColumnNames) {
 
         final Set<String> normalizedFieldNames = getNormalizedColumnNames(rootNode, translateFieldNames);
         for (final String requiredColName : schema.getRequiredColumnNames()) {
@@ -437,15 +414,7 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
         final StringBuilder sqlBuilder = new StringBuilder();
         int fieldCount = 0;
-        sqlBuilder.append("INSERT INTO ");
-        if (quoteTableName) {
-            sqlBuilder.append(schema.getQuotedIdentifierString())
-                .append(tableName)
-                .append(schema.getQuotedIdentifierString());
-        } else {
-            sqlBuilder.append(tableName);
-        }
-        sqlBuilder.append(" (");
+        sqlBuilder.append("INSERT INTO ").append(tableName).append(" (");
 
         // iterate over all of the elements in the JSON, building the SQL statement by adding the column names, as well as
         // adding the column value to a "sql.args.N.value" attribute and the type of a "sql.args.N.type" attribute add the
@@ -464,12 +433,12 @@ public class ConvertJSONToSQL extends AbstractProcessor {
                     sqlBuilder.append(", ");
                 }
 
-                if(escapeColumnNames){
-                    sqlBuilder.append(schema.getQuotedIdentifierString())
-                        .append(desc.getColumnName())
-                        .append(schema.getQuotedIdentifierString());
-                } else {
+                if(!escapeColumnNames){
                     sqlBuilder.append(desc.getColumnName());
+                } else {
+                    sqlBuilder.append(schema.getQuotedIdentifierString());
+                    sqlBuilder.append(desc.getColumnName());
+                    sqlBuilder.append(schema.getQuotedIdentifierString());
                 }
 
                 final int sqlType = desc.getDataType();
@@ -507,7 +476,7 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
     private String generateUpdate(final JsonNode rootNode, final Map<String, String> attributes, final String tableName, final String updateKeys,
                                   final TableSchema schema, final boolean translateFieldNames, final boolean ignoreUnmappedFields, final boolean failUnmappedColumns,
-                                  final boolean warningUnmappedColumns, boolean escapeColumnNames, boolean quoteTableName) {
+                                  final boolean warningUnmappedColumns, boolean escapeColumnNames) {
 
         final Set<String> updateKeyNames;
         if (updateKeys == null) {
@@ -525,16 +494,7 @@ public class ConvertJSONToSQL extends AbstractProcessor {
 
         final StringBuilder sqlBuilder = new StringBuilder();
         int fieldCount = 0;
-        sqlBuilder.append("UPDATE ");
-        if (quoteTableName) {
-            sqlBuilder.append(schema.getQuotedIdentifierString())
-                .append(tableName)
-                .append(schema.getQuotedIdentifierString());
-        } else {
-            sqlBuilder.append(tableName);
-        }
-
-        sqlBuilder.append(" SET ");
+        sqlBuilder.append("UPDATE ").append(tableName).append(" SET ");
 
 
         // Create a Set of all normalized Update Key names, and ensure that there is a field in the JSON
@@ -583,12 +543,12 @@ public class ConvertJSONToSQL extends AbstractProcessor {
                 sqlBuilder.append(", ");
             }
 
-            if(escapeColumnNames){
+            if(!escapeColumnNames){
+                sqlBuilder.append(desc.getColumnName());
+            } else {
                 sqlBuilder.append(schema.getQuotedIdentifierString())
                             .append(desc.getColumnName())
                             .append(schema.getQuotedIdentifierString());
-            } else {
-                sqlBuilder.append(desc.getColumnName());
             }
 
             sqlBuilder.append(" = ?");
@@ -632,12 +592,12 @@ public class ConvertJSONToSQL extends AbstractProcessor {
             }
             fieldCount++;
 
-            if(escapeColumnNames){
+            if(!escapeColumnNames){
+                sqlBuilder.append(normalizedColName);
+            } else {
                 sqlBuilder.append(schema.getQuotedIdentifierString())
                         .append(normalizedColName)
                         .append(schema.getQuotedIdentifierString());
-            } else {
-                sqlBuilder.append(normalizedColName);
             }
             sqlBuilder.append(" = ?");
             final int sqlType = desc.getDataType();
@@ -649,84 +609,6 @@ public class ConvertJSONToSQL extends AbstractProcessor {
                 fieldValue = fieldValue.substring(0, colSize);
             }
             attributes.put("sql.args." + fieldCount + ".value", fieldValue);
-        }
-
-        return sqlBuilder.toString();
-    }
-
-    private String generateDelete(final JsonNode rootNode, final Map<String, String> attributes, final String tableName,
-                                  final TableSchema schema, final boolean translateFieldNames, final boolean ignoreUnmappedFields, final boolean failUnmappedColumns,
-                                  final boolean warningUnmappedColumns, boolean escapeColumnNames, boolean quoteTableName) {
-        final Set<String> normalizedFieldNames = getNormalizedColumnNames(rootNode, translateFieldNames);
-        for (final String requiredColName : schema.getRequiredColumnNames()) {
-            final String normalizedColName = normalizeColumnName(requiredColName, translateFieldNames);
-            if (!normalizedFieldNames.contains(normalizedColName)) {
-                String missingColMessage = "JSON does not have a value for the Required column '" + requiredColName + "'";
-                if (failUnmappedColumns) {
-                    getLogger().error(missingColMessage);
-                    throw new ProcessException(missingColMessage);
-                } else if (warningUnmappedColumns) {
-                    getLogger().warn(missingColMessage);
-                }
-            }
-        }
-
-        final StringBuilder sqlBuilder = new StringBuilder();
-        int fieldCount = 0;
-        sqlBuilder.append("DELETE FROM ");
-        if (quoteTableName) {
-            sqlBuilder.append(schema.getQuotedIdentifierString())
-                    .append(tableName)
-                    .append(schema.getQuotedIdentifierString());
-        } else {
-            sqlBuilder.append(tableName);
-        }
-
-        sqlBuilder.append(" WHERE ");
-
-        // iterate over all of the elements in the JSON, building the SQL statement by adding the column names, as well as
-        // adding the column value to a "sql.args.N.value" attribute and the type of a "sql.args.N.type" attribute add the
-        // columns that we are inserting into
-        final Iterator<String> fieldNames = rootNode.getFieldNames();
-        while (fieldNames.hasNext()) {
-            final String fieldName = fieldNames.next();
-
-            final ColumnDescription desc = schema.getColumns().get(normalizeColumnName(fieldName, translateFieldNames));
-            if (desc == null && !ignoreUnmappedFields) {
-                throw new ProcessException("Cannot map JSON field '" + fieldName + "' to any column in the database");
-            }
-
-            if (desc != null) {
-                if (fieldCount++ > 0) {
-                    sqlBuilder.append(" AND ");
-                }
-
-                if (escapeColumnNames) {
-                    sqlBuilder.append(schema.getQuotedIdentifierString())
-                            .append(desc.getColumnName())
-                            .append(schema.getQuotedIdentifierString());
-                } else {
-                    sqlBuilder.append(desc.getColumnName());
-                }
-                sqlBuilder.append(" = ?");
-
-                final int sqlType = desc.getDataType();
-                attributes.put("sql.args." + fieldCount + ".type", String.valueOf(sqlType));
-
-                final Integer colSize = desc.getColumnSize();
-                final JsonNode fieldNode = rootNode.get(fieldName);
-                if (!fieldNode.isNull()) {
-                    String fieldValue = fieldNode.asText();
-                    if (colSize != null && fieldValue.length() > colSize) {
-                        fieldValue = fieldValue.substring(0, colSize);
-                    }
-                    attributes.put("sql.args." + fieldCount + ".value", fieldValue);
-                }
-            }
-        }
-
-        if (fieldCount == 0) {
-            throw new ProcessException("None of the fields in the JSON map to the columns defined by the " + tableName + " table");
         }
 
         return sqlBuilder.toString();

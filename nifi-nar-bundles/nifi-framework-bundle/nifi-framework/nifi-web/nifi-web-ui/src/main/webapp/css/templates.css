@@ -91,7 +91,3 @@
     right: 0px;
     min-height: 150px;
 }
-
-#templates-table div.slick-viewport {
-    overflow-x: hidden !important;
-}

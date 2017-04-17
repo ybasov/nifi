@@ -29,12 +29,7 @@ public class OracleDatabaseAdapter implements DatabaseAdapter {
     }
 
     @Override
-    public String getDescription() {
-        return "Generates Oracle compliant SQL";
-    }
-
-    @Override
-    public String getSelectStatement(String tableName, String columnNames, String whereClause, String orderByClause, Long limit, Long offset) {
+    public String getSelectStatement(String tableName, String columnNames, String whereClause, String orderByClause, Integer limit, Integer offset) {
         if (StringUtils.isEmpty(tableName)) {
             throw new IllegalArgumentException("Table name cannot be null or empty");
         }
@@ -71,7 +66,7 @@ public class OracleDatabaseAdapter implements DatabaseAdapter {
         }
         if (nestedSelect) {
             query.append(") a");
-            long offsetVal = 0;
+            int offsetVal = 0;
             if (offset != null) {
                 offsetVal = offset;
             }

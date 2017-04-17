@@ -28,7 +28,6 @@ import org.apache.hadoop.io.compress.Lz4Codec;
 import org.apache.hadoop.io.compress.SnappyCodec;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.nifi.annotation.behavior.RequiresInstanceClassLoading;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
@@ -37,7 +36,6 @@ import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.Validator;
 import org.apache.nifi.hadoop.KerberosProperties;
 import org.apache.nifi.hadoop.SecurityUtil;
-import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessorInitializationContext;
@@ -46,6 +44,7 @@ import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.util.StringUtils;
 
 import javax.net.SocketFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
@@ -65,7 +64,6 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * This is a base class that is helpful when building processors interacting with HDFS.
  */
-@RequiresInstanceClassLoading(cloneAncestorResources = true)
 public abstract class AbstractHadoopProcessor extends AbstractProcessor {
     /**
      * Compression Type Enum
@@ -191,9 +189,7 @@ public abstract class AbstractHadoopProcessor extends AbstractProcessor {
                 // then load the Configuration and set the new resources in the holder
                 if (resources == null || !configResources.equals(resources.getConfigResources())) {
                     getLogger().debug("Reloading validation resources");
-                    final Configuration config = new ExtendedConfiguration(getLogger());
-                    config.setClassLoader(Thread.currentThread().getContextClassLoader());
-                    resources = new ValidationResources(configResources, getConfigurationFromResources(config, configResources));
+                    resources = new ValidationResources(configResources, getConfigurationFromResources(configResources));
                     validationResourceHolder.set(resources);
                 }
 
@@ -242,8 +238,9 @@ public abstract class AbstractHadoopProcessor extends AbstractProcessor {
         hdfsResources.set(new HdfsResources(null, null, null));
     }
 
-    private static Configuration getConfigurationFromResources(final Configuration config, String configResources) throws IOException {
+    private static Configuration getConfigurationFromResources(String configResources) throws IOException {
         boolean foundResources = false;
+        final Configuration config = new ExtendedConfiguration();
         if (null != configResources) {
             String[] resources = configResources.split(",");
             for (String resource : resources) {
@@ -273,10 +270,8 @@ public abstract class AbstractHadoopProcessor extends AbstractProcessor {
      * Reset Hadoop Configuration and FileSystem based on the supplied configuration resources.
      */
     HdfsResources resetHDFSResources(String configResources, ProcessContext context) throws IOException {
-        Configuration config = new ExtendedConfiguration(getLogger());
-        config.setClassLoader(Thread.currentThread().getContextClassLoader());
-
-        getConfigurationFromResources(config, configResources);
+        Configuration config = getConfigurationFromResources(configResources);
+        config.setClassLoader(Thread.currentThread().getContextClassLoader()); // set the InstanceClassLoader
 
         // first check for timeout on HDFS connection, because FileSystem has a hard coded 15 minute timeout
         checkHdfsUriForTimeout(config);
@@ -304,7 +299,6 @@ public abstract class AbstractHadoopProcessor extends AbstractProcessor {
                 fs = getFileSystemAsUser(config, ugi);
             }
         }
-        getLogger().debug("resetHDFSResources UGI {}", new Object[]{ugi});
 
         final Path workingDir = fs.getWorkingDirectory();
         getLogger().info("Initialized a new HDFS File System with working dir: {} default block size: {} default replication: {} config: {}",
@@ -461,19 +455,13 @@ public abstract class AbstractHadoopProcessor extends AbstractProcessor {
             getLogger().info("Kerberos ticket age exceeds threshold [{} seconds] " +
                 "attempting to renew ticket for user {}", new Object[]{
               kerberosReloginThreshold, ugi.getUserName()});
-            ugi.doAs((PrivilegedExceptionAction<Void>) () -> {
-                ugi.checkTGTAndReloginFromKeytab();
-                return null;
-            });
+            ugi.checkTGTAndReloginFromKeytab();
             lastKerberosReloginTime = System.currentTimeMillis() / 1000;
             getLogger().info("Kerberos relogin successful or ticket still valid");
         } catch (IOException e) {
             // Most likely case of this happening is ticket is expired and error getting a new one,
             // meaning dfs operations would fail
             getLogger().error("Kerberos relogin failed", e);
-            throw new ProcessException("Unable to renew kerberos ticket", e);
-        } catch (InterruptedException e) {
-            getLogger().error("Interrupted while attempting Kerberos relogin", e);
             throw new ProcessException("Unable to renew kerberos ticket", e);
         }
     }
@@ -534,22 +522,16 @@ public abstract class AbstractHadoopProcessor extends AbstractProcessor {
      */
     static class ExtendedConfiguration extends Configuration {
 
-        private final ComponentLog logger;
         private final Map<ClassLoader, Map<String, WeakReference<Class<?>>>> CACHE_CLASSES = new WeakHashMap<>();
 
-        public ExtendedConfiguration(final ComponentLog logger) {
-            this.logger = logger;
-        }
-
         public Class<?> getClassByNameOrNull(String name) {
-            final ClassLoader classLoader = getClassLoader();
-
             Map<String, WeakReference<Class<?>>> map;
+
             synchronized (CACHE_CLASSES) {
-                map = CACHE_CLASSES.get(classLoader);
+                map = CACHE_CLASSES.get(getClassLoader());
                 if (map == null) {
                     map = Collections.synchronizedMap(new WeakHashMap<>());
-                    CACHE_CLASSES.put(classLoader, map);
+                    CACHE_CLASSES.put(getClassLoader(), map);
                 }
             }
 
@@ -561,9 +543,9 @@ public abstract class AbstractHadoopProcessor extends AbstractProcessor {
 
             if (clazz == null) {
                 try {
-                    clazz = Class.forName(name, true, classLoader);
+                    clazz = Class.forName(name, true, getClassLoader());
                 } catch (ClassNotFoundException e) {
-                    logger.error(e.getMessage(), e);
+                    e.printStackTrace();
                     return null;
                 }
                 // two putters can race here, but they'll put the same class

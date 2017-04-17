@@ -34,7 +34,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
@@ -90,15 +89,6 @@ public class TestListFile {
         }
     }
 
-    /**
-     * This method ensures runner clears transfer state,
-     * and sleeps the current thread for DEFAULT_SLEEP_MILLIS before executing runner.run().
-     */
-    private void runNext() throws InterruptedException {
-        runner.clearTransferState();
-        Thread.sleep(DEFAULT_SLEEP_MILLIS);
-        runner.run();
-    }
 
     @Test
     public void testGetRelationships() throws Exception {
@@ -117,18 +107,21 @@ public class TestListFile {
 
     @Test
     public void testPerformListing() throws Exception {
-
-        runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
-        runNext();
-        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
-
         // create first file
         final File file1 = new File(TESTDIR + "/listing1.txt");
         assertTrue(file1.createNewFile());
         assertTrue(file1.setLastModified(time4millis));
 
         // process first file and set new timestamp
-        runNext();
+        runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
+        runner.run();
+
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(1, successFiles1.size());
@@ -139,7 +132,14 @@ public class TestListFile {
         assertTrue(file2.setLastModified(time2millis));
 
         // process second file after timestamp
-        runNext();
+        runner.clearTransferState();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles2 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(1, successFiles2.size());
@@ -150,88 +150,95 @@ public class TestListFile {
         assertTrue(file3.setLastModified(time4millis));
 
         // process third file before timestamp
-        runNext();
+        runner.clearTransferState();
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles3 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(0, successFiles3.size());
 
         // force state to reset and process all files
+        runner.clearTransferState();
         runner.removeProperty(ListFile.DIRECTORY);
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
-        runNext();
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles4 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
-        assertEquals(3, successFiles4.size());
+        assertEquals(2, successFiles4.size());
 
-        runNext();
-        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 1);
     }
 
     @Test
     public void testFilterAge() throws Exception {
-
         final File file1 = new File(TESTDIR + "/age1.txt");
         assertTrue(file1.createNewFile());
+        assertTrue(file1.setLastModified(time0millis));
 
         final File file2 = new File(TESTDIR + "/age2.txt");
         assertTrue(file2.createNewFile());
+        assertTrue(file2.setLastModified(time2millis));
 
         final File file3 = new File(TESTDIR + "/age3.txt");
         assertTrue(file3.createNewFile());
-
-        final Function<Boolean, Object> runNext = resetAges -> {
-            if (resetAges) {
-                resetAges();
-                assertTrue(file1.setLastModified(time0millis));
-                assertTrue(file2.setLastModified(time2millis));
-                assertTrue(file3.setLastModified(time4millis));
-            }
-            try {
-                runNext();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            return null;
-        };
+        assertTrue(file3.setLastModified(time4millis));
 
         // check all files
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
-        runNext.apply(true);
-        runner.assertTransferCount(ListFile.REL_SUCCESS, 3);
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 2);
+        runner.clearTransferState();
 
-        // processor updates internal state, it shouldn't pick the same ones.
-        runNext.apply(false);
-        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+        runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
+        final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
+        assertEquals(1, successFiles1.size());
 
         // exclude oldest
+        runner.clearTransferState();
         runner.setProperty(ListFile.MIN_AGE, age0);
         runner.setProperty(ListFile.MAX_AGE, age3);
-        runNext.apply(true);
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles2 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
-        assertEquals(2, successFiles2.size());
-        assertEquals(file2.getName(), successFiles2.get(0).getAttribute("filename"));
-        assertEquals(file1.getName(), successFiles2.get(1).getAttribute("filename"));
+        assertEquals(1, successFiles2.size());
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 1);
 
         // exclude newest
+        runner.clearTransferState();
         runner.setProperty(ListFile.MIN_AGE, age1);
         runner.setProperty(ListFile.MAX_AGE, age5);
-        runNext.apply(true);
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles3 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
-        assertEquals(2, successFiles3.size());
-        assertEquals(file3.getName(), successFiles3.get(0).getAttribute("filename"));
-        assertEquals(file2.getName(), successFiles3.get(1).getAttribute("filename"));
+        assertEquals(1, successFiles3.size());
 
         // exclude oldest and newest
+        runner.clearTransferState();
         runner.setProperty(ListFile.MIN_AGE, age1);
         runner.setProperty(ListFile.MAX_AGE, age3);
-        runNext.apply(true);
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles4 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
-        assertEquals(1, successFiles4.size());
-        assertEquals(file2.getName(), successFiles4.get(0).getAttribute("filename"));
+        assertEquals(0, successFiles4.size());
+        runner.clearTransferState();
 
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+        runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 1);
     }
 
     @Test
@@ -266,37 +273,68 @@ public class TestListFile {
 
         // check all files
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(3, successFiles1.size());
 
         // exclude largest
+        runner.clearTransferState();
         runner.removeProperty(ListFile.MIN_AGE);
         runner.removeProperty(ListFile.MAX_AGE);
         runner.setProperty(ListFile.MIN_SIZE, "0 b");
         runner.setProperty(ListFile.MAX_SIZE, "7500 b");
-        runNext();
+        runner.run();
+
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles2 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(2, successFiles2.size());
 
         // exclude smallest
+        runner.clearTransferState();
         runner.removeProperty(ListFile.MIN_AGE);
         runner.removeProperty(ListFile.MAX_AGE);
         runner.setProperty(ListFile.MIN_SIZE, "2500 b");
         runner.removeProperty(ListFile.MAX_SIZE);
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles3 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(2, successFiles3.size());
 
         // exclude oldest and newest
+        runner.clearTransferState();
         runner.removeProperty(ListFile.MIN_AGE);
         runner.removeProperty(ListFile.MAX_AGE);
         runner.setProperty(ListFile.MIN_SIZE, "2500 b");
         runner.setProperty(ListFile.MAX_SIZE, "7500 b");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles4 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(1, successFiles4.size());
@@ -326,6 +364,7 @@ public class TestListFile {
         assertTrue(file2.setLastModified(now));
 
         // check all files
+        runner.clearTransferState();
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
         runner.setProperty(ListFile.FILE_FILTER, ".*");
         runner.removeProperty(ListFile.MIN_AGE);
@@ -333,14 +372,25 @@ public class TestListFile {
         runner.removeProperty(ListFile.MIN_SIZE);
         runner.removeProperty(ListFile.MAX_SIZE);
         runner.setProperty(ListFile.IGNORE_HIDDEN_FILES, "false");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(2, successFiles1.size());
 
         // exclude hidden
+        runner.clearTransferState();
         runner.setProperty(ListFile.IGNORE_HIDDEN_FILES, "true");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles2 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(1, successFiles2.size());
@@ -348,7 +398,6 @@ public class TestListFile {
 
     @Test
     public void testFilterFilePattern() throws Exception {
-
         final long now = getTestModifiedTime();
 
         final File file1 = new File(TESTDIR + "/file1-abc-apple.txt");
@@ -368,21 +417,31 @@ public class TestListFile {
         assertTrue(file4.setLastModified(now));
 
         // check all files
+        runner.clearTransferState();
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
         runner.setProperty(ListFile.FILE_FILTER, ListFile.FILE_FILTER.getDefaultValue());
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(4, successFiles1.size());
 
         // filter file on pattern
-        // Modifying FILE_FILTER property reset listing status, so these files will be listed again.
+        runner.clearTransferState();
         runner.setProperty(ListFile.FILE_FILTER, ".*-xyz-.*");
-        runNext();
-        runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS, 2);
-
-        runNext();
+        runner.run();
         runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+        runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
+        final List<MockFlowFile> successFiles2 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
+        assertEquals(2, successFiles2.size());
     }
 
     @Test
@@ -415,24 +474,40 @@ public class TestListFile {
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
         runner.setProperty(ListFile.FILE_FILTER, ListFile.FILE_FILTER.getDefaultValue());
         runner.setProperty(ListFile.RECURSE, "true");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
 
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(4, successFiles1.size());
 
         // filter path on pattern subdir1
+        runner.clearTransferState();
         runner.setProperty(ListFile.PATH_FILTER, "subdir1");
         runner.setProperty(ListFile.RECURSE, "true");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles2 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(3, successFiles2.size());
 
         // filter path on pattern subdir2
+        runner.clearTransferState();
         runner.setProperty(ListFile.PATH_FILTER, "subdir2");
         runner.setProperty(ListFile.RECURSE, "true");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles3 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(1, successFiles3.size());
@@ -461,9 +536,16 @@ public class TestListFile {
         assertTrue(file3.setLastModified(now));
 
         // check all files
+        runner.clearTransferState();
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
         runner.setProperty(ListFile.RECURSE, "true");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS, 3);
         final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         for (final MockFlowFile mff : successFiles1) {
@@ -488,8 +570,17 @@ public class TestListFile {
         assertEquals(3, successFiles1.size());
 
         // exclude hidden
+        runner.clearTransferState();
         runner.setProperty(ListFile.RECURSE, "false");
-        runNext();
+        runner.run();
+
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles2 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(1, successFiles2.size());
@@ -512,9 +603,16 @@ public class TestListFile {
         assertTrue(file3.setLastModified(now));
 
         // check all files
+        runner.clearTransferState();
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
         runner.setProperty(ListFile.RECURSE, "true");
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         runner.assertTransferCount(ListFile.REL_SUCCESS, 3);
     }
@@ -532,8 +630,16 @@ public class TestListFile {
         String userName = System.getProperty("user.name");
 
         // validate the file transferred
+        runner.clearTransferState();
         runner.setProperty(ListFile.DIRECTORY, testDir.getAbsolutePath());
-        runNext();
+        runner.run();
+        runner.assertTransferCount(ListFile.REL_SUCCESS, 0);
+        runner.clearTransferState();
+
+        Thread.sleep(DEFAULT_SLEEP_MILLIS);
+
+        runner.run();
+
         runner.assertAllFlowFilesTransferred(ListFile.REL_SUCCESS);
         final List<MockFlowFile> successFiles1 = runner.getFlowFilesForRelationship(ListFile.REL_SUCCESS);
         assertEquals(1, successFiles1.size());

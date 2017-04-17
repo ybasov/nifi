@@ -271,11 +271,4 @@ public class TestValidateCsv {
         runner.assertNotValid();
     }
 
-    @Test
-    public void testParseSchemaCommaBoundary() {
-        final TestRunner runner = TestRunners.newTestRunner(new ValidateCsv());
-        runner.setProperty(ValidateCsv.SCHEMA, "Null(),Null");
-        runner.assertValid();
-    }
-
 }

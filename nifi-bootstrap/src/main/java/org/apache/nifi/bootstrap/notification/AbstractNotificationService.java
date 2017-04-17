@@ -34,5 +34,4 @@ public abstract class AbstractNotificationService extends AbstractConfigurableCo
     public String getIdentifier() {
         return identifier;
     }
-
 }

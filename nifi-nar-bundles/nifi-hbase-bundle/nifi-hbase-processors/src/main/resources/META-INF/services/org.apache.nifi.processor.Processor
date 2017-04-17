@@ -16,4 +16,3 @@
 org.apache.nifi.hbase.GetHBase
 org.apache.nifi.hbase.PutHBaseCell
 org.apache.nifi.hbase.PutHBaseJSON
-org.apache.nifi.hbase.FetchHBaseRow

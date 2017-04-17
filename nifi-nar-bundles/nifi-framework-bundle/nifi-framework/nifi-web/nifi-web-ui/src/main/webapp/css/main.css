@@ -239,11 +239,20 @@ span.details-title {
     position: absolute;
     top: 0px;
     left: 135px;
-    height: 28px;
+    cursor: pointer;
+    overflow: hidden;
 }
 
 #template-file-field {
-    display: none;
+    height: 28px;
+    display: inline;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    filter: alpha(opacity = 0);
+    z-index: 3000;
+    cursor: pointer;
 }
 
 #submit-template-container {

@@ -16,55 +16,6 @@
  */
 package org.apache.nifi.remote.util;
 
-import static org.apache.commons.lang3.StringUtils.isEmpty;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_BATCH_COUNT;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_BATCH_DURATION;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_BATCH_SIZE;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_REQUEST_EXPIRATION;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_USE_COMPRESSION;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.LOCATION_HEADER_NAME;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.LOCATION_URI_INTENT_NAME;
-import static org.apache.nifi.remote.protocol.http.HttpHeaders.LOCATION_URI_INTENT_VALUE;
-
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PipedInputStream;
-import java.io.PipedOutputStream;
-import java.net.InetAddress;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.net.ssl.SSLSession;
-
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
@@ -136,6 +87,49 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
+
+import static org.apache.commons.lang3.StringUtils.isEmpty;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_BATCH_COUNT;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_BATCH_DURATION;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_BATCH_SIZE;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_REQUEST_EXPIRATION;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.HANDSHAKE_PROPERTY_USE_COMPRESSION;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.LOCATION_HEADER_NAME;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.LOCATION_URI_INTENT_NAME;
+import static org.apache.nifi.remote.protocol.http.HttpHeaders.LOCATION_URI_INTENT_VALUE;
+
 public class SiteToSiteRestApiClient implements Closeable {
 
     private static final String EVENT_CATEGORY = "Site-to-Site";
@@ -162,7 +156,6 @@ public class SiteToSiteRestApiClient implements Closeable {
     private CloseableHttpAsyncClient httpAsyncClient;
 
     private boolean compress = false;
-    private InetAddress localAddress = null;
     private long requestExpirationMillis = 0;
     private int serverTransactionTtl = 0;
     private int batchCount = 0;
@@ -241,10 +234,6 @@ public class SiteToSiteRestApiClient implements Closeable {
             .setConnectionRequestTimeout(connectTimeoutMillis)
             .setConnectTimeout(connectTimeoutMillis)
             .setSocketTimeout(readTimeoutMillis);
-
-        if (localAddress != null) {
-            requestConfigBuilder.setLocalAddress(localAddress);
-        }
 
         if (proxy != null) {
             requestConfigBuilder.setProxy(proxy.getHttpHost());
@@ -327,48 +316,7 @@ public class SiteToSiteRestApiClient implements Closeable {
         }
     }
 
-    /**
-     * Parse the clusterUrls String, and try each URL in clusterUrls one by one to get a controller resource
-     * from those remote NiFi instances until a controller is successfully returned or try out all URLs.
-     * After this method execution, the base URL is set with the successful URL.
-     * @param clusterUrls url of the remote NiFi instance, multiple urls can be specified in comma-separated format
-     * @throws IllegalArgumentException when it fails to parse the URLs string,
-     * URLs string contains multiple protocols (http and https mix),
-     * or none of URL is specified.
-     */
-    public ControllerDTO getController(final String clusterUrls) throws IOException {
-        return getController(parseClusterUrls(clusterUrls));
-    }
-
-    /**
-     * Try each URL in clusterUrls one by one to get a controller resource
-     * from those remote NiFi instances until a controller is successfully returned or try out all URLs.
-     * After this method execution, the base URL is set with the successful URL.
-     */
-    public ControllerDTO getController(final Set<String> clusterUrls) throws IOException {
-
-        IOException lastException = null;
-        for (final String clusterUrl : clusterUrls) {
-            // The url may not be normalized if it passed directly without parsed with parseClusterUrls.
-            setBaseUrl(resolveBaseUrl(clusterUrl));
-            try {
-                return getController();
-            } catch (IOException e) {
-                lastException = e;
-                logger.warn("Failed to get controller from " + clusterUrl + " due to " + e);
-                if (logger.isDebugEnabled()) {
-                    logger.debug("", e);
-                }
-            }
-        }
-
-        if (clusterUrls.size() > 1) {
-            throw new IOException("Tried all cluster URLs but none of those was accessible. Last Exception was " + lastException, lastException);
-        }
-        throw lastException;
-    }
-
-    private ControllerDTO getController() throws IOException {
+    public ControllerDTO getController() throws IOException {
         try {
             final HttpGet get = createGetControllerRequest();
             return execute(get, ControllerEntity.class).getController();
@@ -923,8 +871,6 @@ public class SiteToSiteRestApiClient implements Closeable {
         extendingApiClient.transportProtocolVersionNegotiator = this.transportProtocolVersionNegotiator;
         extendingApiClient.connectTimeoutMillis = this.connectTimeoutMillis;
         extendingApiClient.readTimeoutMillis = this.readTimeoutMillis;
-        extendingApiClient.localAddress = this.localAddress;
-
         final int extendFrequency = serverTransactionTtl / 2;
 
         ttlExtendingFuture = ttlExtendTaskExecutor.scheduleWithFixedDelay(() -> {
@@ -1206,86 +1152,21 @@ public class SiteToSiteRestApiClient implements Closeable {
 
     public void setConnectTimeoutMillis(final int connectTimeoutMillis) {
         this.connectTimeoutMillis = connectTimeoutMillis;
-        setupRequestConfig();
     }
 
     public void setReadTimeoutMillis(final int readTimeoutMillis) {
         this.readTimeoutMillis = readTimeoutMillis;
-        setupRequestConfig();
     }
 
-    public static String getFirstUrl(final String clusterUrlStr) {
-        if (clusterUrlStr == null) {
-            return null;
-        }
-
-        final int commaIndex = clusterUrlStr.indexOf(',');
-        if (commaIndex > -1) {
-            return clusterUrlStr.substring(0, commaIndex);
-        }
-        return clusterUrlStr;
-    }
-
-    /**
-     * Parse the comma-separated URLs string for the remote NiFi instances.
-     * @return A set containing one or more URLs
-     * @throws IllegalArgumentException when it fails to parse the URLs string,
-     * URLs string contains multiple protocols (http and https mix),
-     * or none of URL is specified.
-     */
-    public static Set<String> parseClusterUrls(final String clusterUrlStr) {
-        final Set<String> urls = new LinkedHashSet<>();
-        if (clusterUrlStr != null && clusterUrlStr.length() > 0) {
-            Arrays.stream(clusterUrlStr.split(","))
-                    .map(s -> s.trim())
-                    .filter(s -> s.length() > 0)
-                    .forEach(s -> {
-                        validateUriString(s);
-                        urls.add(resolveBaseUrl(s).intern());
-                    });
-        }
-
-        if (urls.size() == 0) {
-            throw new IllegalArgumentException("Cluster URL was not specified.");
-        }
-
-        final Predicate<String> isHttps = url -> url.toLowerCase().startsWith("https:");
-        if (urls.stream().anyMatch(isHttps) && urls.stream().anyMatch(isHttps.negate())) {
-            throw new IllegalArgumentException("Different protocols are used in the cluster URLs " + clusterUrlStr);
-        }
-
-        return Collections.unmodifiableSet(urls);
-    }
-
-    private static void validateUriString(String s) {
-        // parse the uri
-        final URI uri;
-        try {
-            uri = URI.create(s);
-        } catch (final IllegalArgumentException e) {
-            throw new IllegalArgumentException("The specified remote process group URL is malformed: " + s);
-        }
-
-        // validate each part of the uri
-        if (uri.getScheme() == null || uri.getHost() == null) {
-            throw new IllegalArgumentException("The specified remote process group URL is malformed: " + s);
-        }
-
-        if (!(uri.getScheme().equalsIgnoreCase("http") || uri.getScheme().equalsIgnoreCase("https"))) {
-            throw new IllegalArgumentException("The specified remote process group URL is invalid because it is not http or https: " + s);
-        }
-    }
-
-    private static String resolveBaseUrl(final String clusterUrl) {
+    public static String resolveBaseUrl(final String clusterUrl) {
         Objects.requireNonNull(clusterUrl, "clusterUrl cannot be null.");
-        final URI uri;
+        URI clusterUri;
         try {
-            uri = new URI(clusterUrl.trim());
+            clusterUri = new URI(clusterUrl.trim());
         } catch (final URISyntaxException e) {
-            throw new IllegalArgumentException("The specified URL is malformed: " + clusterUrl);
+            throw new IllegalArgumentException("Specified clusterUrl was: " + clusterUrl, e);
         }
-
-        return resolveBaseUrl(uri);
+        return resolveBaseUrl(clusterUri);
     }
 
     /**
@@ -1298,17 +1179,7 @@ public class SiteToSiteRestApiClient implements Closeable {
      * @param clusterUrl url to be resolved
      * @return resolved url
      */
-    private static String resolveBaseUrl(final URI clusterUrl) {
-
-        if (clusterUrl.getScheme() == null || clusterUrl.getHost() == null) {
-            throw new IllegalArgumentException("The specified URL is malformed: " + clusterUrl);
-        }
-
-        if (!(clusterUrl.getScheme().equalsIgnoreCase("http") || clusterUrl.getScheme().equalsIgnoreCase("https"))) {
-            throw new IllegalArgumentException("The specified URL is invalid because it is not http or https: " + clusterUrl);
-        }
-
-
+    public static String resolveBaseUrl(final URI clusterUrl) {
         String uriPath = clusterUrl.getPath().trim();
 
         if (StringUtils.isEmpty(uriPath) || uriPath.equals("/")) {
@@ -1346,10 +1217,6 @@ public class SiteToSiteRestApiClient implements Closeable {
 
     public void setCompress(final boolean compress) {
         this.compress = compress;
-    }
-
-    public void setLocalAddress(final InetAddress localAddress) {
-        this.localAddress = localAddress;
     }
 
     public void setRequestExpirationMillis(final long requestExpirationMillis) {

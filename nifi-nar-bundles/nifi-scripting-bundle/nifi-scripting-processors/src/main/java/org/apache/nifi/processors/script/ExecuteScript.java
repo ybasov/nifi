@@ -16,30 +16,22 @@
  */
 package org.apache.nifi.processors.script;
 
-
 import org.apache.commons.io.IOUtils;
 import org.apache.nifi.annotation.behavior.DynamicProperty;
 import org.apache.nifi.annotation.behavior.Restricted;
-import org.apache.nifi.annotation.behavior.Stateful;
-import org.apache.nifi.annotation.documentation.SeeAlso;
-import org.apache.nifi.annotation.lifecycle.OnStopped;
-import org.apache.nifi.components.PropertyDescriptor;
-import org.apache.nifi.components.ValidationContext;
-import org.apache.nifi.components.ValidationResult;
-import org.apache.nifi.components.state.Scope;
-import org.apache.nifi.logging.ComponentLog;
-import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
-import org.apache.nifi.processor.AbstractSessionFactoryProcessor;
+import org.apache.nifi.annotation.lifecycle.OnScheduled;
+import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessSessionFactory;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
+import org.apache.nifi.util.StringUtils;
 
-import java.nio.charset.Charset;
 import javax.script.Bindings;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
@@ -47,14 +39,13 @@ import javax.script.ScriptException;
 import javax.script.SimpleBindings;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-@Tags({"script", "execute", "groovy", "python", "jython", "jruby", "ruby", "javascript", "js", "lua", "luaj", "clojure", "restricted"})
+@Tags({"script", "execute", "groovy", "python", "jython", "jruby", "ruby", "javascript", "js", "lua", "luaj", "restricted"})
 @CapabilityDescription("Experimental - Executes a script given the flow file and a process session.  The script is responsible for "
         + "handling the incoming flow file (transfer to SUCCESS or remove, e.g.) as well as any flow files created by "
         + "the script. If the handling is incomplete or incorrect, the session will be rolled back. Experimental: "
@@ -66,18 +57,9 @@ import java.util.Set;
         description = "Updates a script engine property specified by the Dynamic Property's key with the value "
                 + "specified by the Dynamic Property's value")
 @Restricted("Provides operator the ability to execute arbitrary code assuming all permissions that NiFi has.")
-@Stateful(scopes = {Scope.LOCAL, Scope.CLUSTER},
-        description = "Scripts can store and retrieve state using the State Management APIs. Consult the State Manager section of the Developer's Guide for more details.")
-@SeeAlso({InvokeScriptedProcessor.class})
-public class ExecuteScript extends AbstractSessionFactoryProcessor {
-
-    // Constants maintained for backwards compatibility
-    public static final Relationship REL_SUCCESS = ScriptingComponentUtils.REL_SUCCESS;
-    public static final Relationship REL_FAILURE = ScriptingComponentUtils.REL_FAILURE;
+public class ExecuteScript extends AbstractScriptProcessor {
 
     private String scriptToRun = null;
-    volatile ScriptingComponentHelper scriptingComponentHelper = new ScriptingComponentHelper();
-
 
     /**
      * Returns the valid relationships for this processor.
@@ -101,13 +83,13 @@ public class ExecuteScript extends AbstractSessionFactoryProcessor {
      */
     @Override
     protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
-        synchronized (scriptingComponentHelper.isInitialized) {
-            if (!scriptingComponentHelper.isInitialized.get()) {
-                scriptingComponentHelper.createResources();
+        synchronized (isInitialized) {
+            if (!isInitialized.get()) {
+                createResources();
             }
         }
 
-        return Collections.unmodifiableList(scriptingComponentHelper.getDescriptors());
+        return Collections.unmodifiableList(descriptors);
     }
 
     /**
@@ -128,10 +110,6 @@ public class ExecuteScript extends AbstractSessionFactoryProcessor {
                 .build();
     }
 
-    @Override
-    protected Collection<ValidationResult> customValidate(ValidationContext validationContext) {
-        return scriptingComponentHelper.customValidate(validationContext);
-    }
 
     /**
      * Performs setup operations when the processor is scheduled to run. This includes evaluating the processor's
@@ -141,22 +119,30 @@ public class ExecuteScript extends AbstractSessionFactoryProcessor {
      */
     @OnScheduled
     public void setup(final ProcessContext context) {
-        scriptingComponentHelper.setupVariables(context);
-
+        scriptEngineName = context.getProperty(SCRIPT_ENGINE).getValue();
+        scriptPath = context.getProperty(SCRIPT_FILE).evaluateAttributeExpressions().getValue();
+        scriptBody = context.getProperty(SCRIPT_BODY).getValue();
+        String modulePath = context.getProperty(MODULES).getValue();
+        if (!StringUtils.isEmpty(modulePath)) {
+            modules = modulePath.split(",");
+        } else {
+            modules = new String[0];
+        }
         // Create a script engine for each possible task
         int maxTasks = context.getMaxConcurrentTasks();
-        scriptingComponentHelper.setup(maxTasks, getLogger());
-        scriptToRun = scriptingComponentHelper.getScriptBody();
+        super.setup(maxTasks);
+        scriptToRun = scriptBody;
 
         try {
-            if (scriptToRun == null && scriptingComponentHelper.getScriptPath() != null) {
-                try (final FileInputStream scriptStream = new FileInputStream(scriptingComponentHelper.getScriptPath())) {
-                    scriptToRun = IOUtils.toString(scriptStream, Charset.defaultCharset());
+            if (scriptToRun == null && scriptPath != null) {
+                try (final FileInputStream scriptStream = new FileInputStream(scriptPath)) {
+                    scriptToRun = IOUtils.toString(scriptStream);
                 }
             }
         } catch (IOException ioe) {
             throw new ProcessException(ioe);
         }
+
     }
 
     /**
@@ -172,12 +158,12 @@ public class ExecuteScript extends AbstractSessionFactoryProcessor {
      */
     @Override
     public void onTrigger(ProcessContext context, ProcessSessionFactory sessionFactory) throws ProcessException {
-        synchronized (scriptingComponentHelper.isInitialized) {
-            if (!scriptingComponentHelper.isInitialized.get()) {
-                scriptingComponentHelper.createResources();
+        synchronized (isInitialized) {
+            if (!isInitialized.get()) {
+                createResources();
             }
         }
-        ScriptEngine scriptEngine = scriptingComponentHelper.engineQ.poll();
+        ScriptEngine scriptEngine = engineQ.poll();
         ComponentLog log = getLogger();
         if (scriptEngine == null) {
             // No engine available so nothing more to do here
@@ -211,11 +197,11 @@ public class ExecuteScript extends AbstractSessionFactoryProcessor {
 
                 // Execute any engine-specific configuration before the script is evaluated
                 ScriptEngineConfigurator configurator =
-                        scriptingComponentHelper.scriptEngineConfiguratorMap.get(scriptingComponentHelper.getScriptEngineName().toLowerCase());
+                        scriptEngineConfiguratorMap.get(scriptEngineName.toLowerCase());
 
                 // Evaluate the script with the configurator (if it exists) or the engine
                 if (configurator != null) {
-                    configurator.eval(scriptEngine, scriptToRun, scriptingComponentHelper.getModules());
+                    configurator.eval(scriptEngine, scriptToRun, modules);
                 } else {
                     scriptEngine.eval(scriptToRun);
                 }
@@ -233,12 +219,7 @@ public class ExecuteScript extends AbstractSessionFactoryProcessor {
             session.rollback(true);
             throw t;
         } finally {
-            scriptingComponentHelper.engineQ.offer(scriptEngine);
+            engineQ.offer(scriptEngine);
         }
-    }
-
-    @OnStopped
-    public void stop() {
-        scriptingComponentHelper.stop();
     }
 }

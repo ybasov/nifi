@@ -53,7 +53,6 @@ import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
-import org.apache.nifi.flowfile.attributes.FragmentAttributes;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -98,10 +97,10 @@ import org.apache.nifi.util.FlowFileUnpackagerV3;
 @SeeAlso(MergeContent.class)
 public class UnpackContent extends AbstractProcessor {
     // attribute keys
-    public static final String FRAGMENT_ID = FragmentAttributes.FRAGMENT_ID.key();
-    public static final String FRAGMENT_INDEX = FragmentAttributes.FRAGMENT_INDEX.key();
-    public static final String FRAGMENT_COUNT = FragmentAttributes.FRAGMENT_COUNT.key();
-    public static final String SEGMENT_ORIGINAL_FILENAME = FragmentAttributes.SEGMENT_ORIGINAL_FILENAME.key();
+    public static final String FRAGMENT_ID = "fragment.identifier";
+    public static final String FRAGMENT_INDEX = "fragment.index";
+    public static final String FRAGMENT_COUNT = "fragment.count";
+    public static final String SEGMENT_ORIGINAL_FILENAME = "segment.original.filename";
 
     public static final String AUTO_DETECT_FORMAT_NAME = "use mime.type attribute";
     public static final String TAR_FORMAT_NAME = "tar";
@@ -124,7 +123,7 @@ public class UnpackContent extends AbstractProcessor {
 
     public static final PropertyDescriptor FILE_FILTER = new PropertyDescriptor.Builder()
             .name("File Filter")
-            .description("Only files contained in the archive whose names match the given regular expression will be extracted (tar/zip only)")
+            .description("Only files whose names match the given regular expression will be extracted (tar/zip only)")
             .required(true)
             .defaultValue(".*")
             .addValidator(StandardValidators.REGULAR_EXPRESSION_VALIDATOR)
@@ -263,8 +262,6 @@ public class UnpackContent extends AbstractProcessor {
                 finishFragmentAttributes(session, flowFile, unpacked);
             }
             session.transfer(unpacked, REL_SUCCESS);
-            final String fragmentId = unpacked.size() > 0 ? unpacked.get(0).getAttribute(FRAGMENT_ID) : null;
-            flowFile = FragmentAttributes.copyAttributesToOriginal(session, flowFile, fragmentId, unpacked.size());
             session.transfer(flowFile, REL_ORIGINAL);
             session.getProvenanceReporter().fork(flowFile, unpacked);
             logger.info("Unpacked {} into {} and transferred to success", new Object[]{flowFile, unpacked});

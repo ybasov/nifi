@@ -47,12 +47,12 @@ public class SocketClient extends AbstractSiteToSiteClient {
         super(config);
 
         final int commsTimeout = (int) config.getTimeout(TimeUnit.MILLISECONDS);
-        pool = new EndpointConnectionPool(
+        pool = new EndpointConnectionPool(clusterUrl,
                 createRemoteDestination(config.getPortIdentifier(), config.getPortName()),
                 commsTimeout,
                 (int) config.getIdleConnectionExpiration(TimeUnit.MILLISECONDS),
                 config.getSslContext(), config.getEventReporter(), config.getPeerPersistenceFile(),
-                siteInfoProvider, config.getLocalAddress()
+                siteInfoProvider
         );
 
         this.compress = config.isUseCompression();

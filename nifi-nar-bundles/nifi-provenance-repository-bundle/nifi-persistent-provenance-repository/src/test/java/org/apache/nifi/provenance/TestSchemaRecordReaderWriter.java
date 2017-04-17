@@ -24,7 +24,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -35,13 +34,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import org.apache.nifi.provenance.schema.EventFieldNames;
 import org.apache.nifi.provenance.schema.EventRecord;
+import org.apache.nifi.provenance.schema.EventRecordFields;
 import org.apache.nifi.provenance.schema.ProvenanceEventSchema;
 import org.apache.nifi.provenance.serialization.RecordReader;
 import org.apache.nifi.provenance.serialization.RecordWriter;
@@ -58,14 +55,14 @@ import org.apache.nifi.repository.schema.RecordField;
 import org.apache.nifi.repository.schema.RecordSchema;
 import org.apache.nifi.repository.schema.Repetition;
 import org.apache.nifi.repository.schema.SimpleRecordField;
+import org.apache.nifi.stream.io.DataOutputStream;
 import org.apache.nifi.stream.io.NullOutputStream;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
 public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter {
-    private final AtomicLong idGenerator = new AtomicLong(0L);
+
     private File journalFile;
     private File tocFile;
 
@@ -73,58 +70,6 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
     public void setup() {
         journalFile = new File("target/storage/" + UUID.randomUUID().toString() + "/testFieldAddedToSchema");
         tocFile = TocUtil.getTocFile(journalFile);
-        idGenerator.set(0L);
-    }
-
-
-    @Test
-    @Ignore("runs forever for performance analysis/profiling")
-    public void testPerformanceOfRandomAccessReads() throws Exception {
-        journalFile = new File("target/storage/" + UUID.randomUUID().toString() + "/testPerformanceOfRandomAccessReads.gz");
-        tocFile = TocUtil.getTocFile(journalFile);
-
-        try (final RecordWriter writer = createWriter(journalFile, new StandardTocWriter(tocFile, true, false), true, 1024 * 32)) {
-            writer.writeHeader(0L);
-
-            for (int i = 0; i < 100_000; i++) {
-                writer.writeRecord(createEvent());
-            }
-        }
-
-        final long[] eventIds = new long[] {
-            4, 80, 1024, 1025, 1026, 1027, 1028, 1029, 1030, 40_000, 80_000, 99_000
-        };
-
-        boolean loopForever = true;
-        while (loopForever) {
-            final long start = System.nanoTime();
-            for (int i = 0; i < 1000; i++) {
-                try (final InputStream in = new FileInputStream(journalFile);
-                    final RecordReader reader = createReader(in, journalFile.getName(), new StandardTocReader(tocFile), 32 * 1024)) {
-
-                    for (final long id : eventIds) {
-                        time(() -> {
-                            reader.skipToEvent(id);
-                            return reader.nextRecord();
-                        }, id);
-                    }
-                }
-            }
-
-            final long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-            System.out.println(ms + " ms total");
-        }
-    }
-
-    private void time(final Callable<StandardProvenanceEventRecord> task, final long id) throws Exception {
-        final long start = System.nanoTime();
-        final StandardProvenanceEventRecord event = task.call();
-        Assert.assertNotNull(event);
-        Assert.assertEquals(id, event.getEventId());
-        //        System.out.println(event);
-        final long nanos = System.nanoTime() - start;
-        final long millis = TimeUnit.NANOSECONDS.toMillis(nanos);
-        //        System.out.println("Took " + millis + " ms to " + taskDescription);
     }
 
 
@@ -138,8 +83,8 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
 
         try (final ByteArraySchemaRecordWriter writer = createSchemaWriter(schemaModifier, toAdd)) {
             writer.writeHeader(1L);
-            writer.writeRecord(createEvent());
-            writer.writeRecord(createEvent());
+            writer.writeRecord(createEvent(), 3L);
+            writer.writeRecord(createEvent(), 3L);
         }
 
         try (final InputStream in = new FileInputStream(journalFile);
@@ -149,6 +94,7 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
             for (int i = 0; i < 2; i++) {
                 final StandardProvenanceEventRecord event = reader.nextRecord();
                 assertNotNull(event);
+                assertEquals(3L, event.getEventId());
                 assertEquals("1234", event.getComponentId());
                 assertEquals(ProvenanceEventType.RECEIVE, event.getEventType());
 
@@ -165,14 +111,14 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
             // Create a schema that has the fields modified
             final RecordSchema schemaV1 = ProvenanceEventSchema.PROVENANCE_EVENT_SCHEMA_V1;
             final List<RecordField> fields = new ArrayList<>(schemaV1.getFields());
-            fields.remove(new SimpleRecordField(EventFieldNames.UPDATED_ATTRIBUTES, FieldType.STRING, Repetition.EXACTLY_ONE));
-            fields.remove(new SimpleRecordField(EventFieldNames.PREVIOUS_ATTRIBUTES, FieldType.STRING, Repetition.EXACTLY_ONE));
+            fields.remove(new SimpleRecordField(EventRecordFields.Names.UPDATED_ATTRIBUTES, FieldType.STRING, Repetition.EXACTLY_ONE));
+            fields.remove(new SimpleRecordField(EventRecordFields.Names.PREVIOUS_ATTRIBUTES, FieldType.STRING, Repetition.EXACTLY_ONE));
             final RecordSchema recordSchema = new RecordSchema(fields);
 
             // Create a record writer whose schema does not contain updated attributes or previous attributes.
             // This means that we must also override the method that writes out attributes so that we are able
             // to avoid actually writing them out.
-            final ByteArraySchemaRecordWriter writer = new ByteArraySchemaRecordWriter(journalFile, idGenerator, tocWriter, false, 0) {
+            final ByteArraySchemaRecordWriter writer = new ByteArraySchemaRecordWriter(journalFile, tocWriter, false, 0) {
                 @Override
                 public void writeHeader(long firstEventId, DataOutputStream out) throws IOException {
                     final ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -184,15 +130,15 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
 
                 @Override
                 protected Record createRecord(final ProvenanceEventRecord event, final long eventId) {
-                    final RecordSchema contentClaimSchema = new RecordSchema(recordSchema.getField(EventFieldNames.CONTENT_CLAIM).getSubFields());
+                    final RecordSchema contentClaimSchema = new RecordSchema(recordSchema.getField(EventRecordFields.Names.CONTENT_CLAIM).getSubFields());
                     return new EventRecord(event, eventId, recordSchema, contentClaimSchema);
                 }
             };
 
             try {
                 writer.writeHeader(1L);
-                writer.writeRecord(createEvent());
-                writer.writeRecord(createEvent());
+                writer.writeRecord(createEvent(), 3L);
+                writer.writeRecord(createEvent(), 3L);
             } finally {
                 writer.close();
             }
@@ -208,6 +154,7 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
             for (int i = 0; i < 2; i++) {
                 final StandardProvenanceEventRecord event = reader.nextRecord();
                 assertNotNull(event);
+                assertEquals(3L, event.getEventId());
                 assertEquals(ProvenanceEventType.RECEIVE, event.getEventType());
 
                 // We will still have a Map<String, String> for updated attributes because the
@@ -228,7 +175,7 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
 
         try (final ByteArraySchemaRecordWriter writer = createSchemaWriter(schemaModifier, toAdd)) {
             writer.writeHeader(1L);
-            writer.writeRecord(createEvent());
+            writer.writeRecord(createEvent(), 3L);
         }
 
         try (final InputStream in = new FileInputStream(journalFile);
@@ -260,9 +207,9 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
         fieldModifier.accept(fields);
 
         final RecordSchema recordSchema = new RecordSchema(fields);
-        final RecordSchema contentClaimSchema = new RecordSchema(recordSchema.getField(EventFieldNames.CONTENT_CLAIM).getSubFields());
+        final RecordSchema contentClaimSchema = new RecordSchema(recordSchema.getField(EventRecordFields.Names.CONTENT_CLAIM).getSubFields());
 
-        final ByteArraySchemaRecordWriter writer = new ByteArraySchemaRecordWriter(journalFile, idGenerator, tocWriter, false, 0) {
+        final ByteArraySchemaRecordWriter writer = new ByteArraySchemaRecordWriter(journalFile, tocWriter, false, 0) {
             @Override
             public void writeHeader(long firstEventId, DataOutputStream out) throws IOException {
                 final ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -303,13 +250,14 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
         final int numEvents = 10_000_000;
         final long startNanos = System.nanoTime();
         try (final OutputStream nullOut = new NullOutputStream();
-            final RecordWriter writer = new ByteArraySchemaRecordWriter(nullOut, "out", idGenerator, tocWriter, false, 0)) {
+            final RecordWriter writer = new ByteArraySchemaRecordWriter(nullOut, tocWriter, false, 0)) {
 
             writer.writeHeader(0L);
 
             for (int i = 0; i < numEvents; i++) {
-                writer.writeRecord(event);
+                writer.writeRecord(event, i);
             }
+
         }
 
         final long nanos = System.nanoTime() - startNanos;
@@ -332,7 +280,7 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
         try (final ByteArrayOutputStream headerOut = new ByteArrayOutputStream();
             final DataOutputStream out = new DataOutputStream(headerOut)) {
 
-            final RecordWriter schemaWriter = new ByteArraySchemaRecordWriter(out, "out", idGenerator, null, false, 0);
+            final RecordWriter schemaWriter = new ByteArraySchemaRecordWriter(out, null, false, 0);
             schemaWriter.writeHeader(1L);
 
             header = headerOut.toByteArray();
@@ -340,12 +288,12 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
 
         final byte[] serializedRecord;
         try (final ByteArrayOutputStream headerOut = new ByteArrayOutputStream();
-            final RecordWriter writer = new ByteArraySchemaRecordWriter(headerOut, "out", idGenerator, null, false, 0)) {
+            final RecordWriter writer = new ByteArraySchemaRecordWriter(headerOut, null, false, 0)) {
 
             writer.writeHeader(1L);
             headerOut.reset();
 
-            writer.writeRecord(event);
+            writer.writeRecord(event, 1L);
             writer.flush();
             serializedRecord = headerOut.toByteArray();
         }
@@ -374,7 +322,7 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
 
     @Override
     protected RecordWriter createWriter(File file, TocWriter tocWriter, boolean compressed, int uncompressedBlockSize) throws IOException {
-        return new ByteArraySchemaRecordWriter(file, idGenerator, tocWriter, compressed, uncompressedBlockSize);
+        return new ByteArraySchemaRecordWriter(file, tocWriter, compressed, uncompressedBlockSize);
     }
 
 
@@ -383,4 +331,11 @@ public class TestSchemaRecordReaderWriter extends AbstractTestRecordReaderWriter
         final ByteArraySchemaRecordReader reader = new ByteArraySchemaRecordReader(in, journalFilename, tocReader, maxAttributeSize);
         return reader;
     }
+
+    private static interface WriteRecordInterceptor {
+        void writeRawRecord(ProvenanceEventRecord event, long recordIdentifier, DataOutputStream out) throws IOException;
+    }
+
+    private static WriteRecordInterceptor NOP_INTERCEPTOR = (event, id, out) -> {};
+    private static WriteRecordInterceptor WRITE_DUMMY_STRING_INTERCEPTOR = (event, id, out) -> out.writeUTF("hello");
 }

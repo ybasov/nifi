@@ -44,7 +44,7 @@ import org.apache.nifi.provenance.lineage.LineageNode;
 /**
  *
  */
-public class StandardLineageResult implements ComputeLineageResult, ProgressiveResult {
+public class StandardLineageResult implements ComputeLineageResult {
 
     public static final int TTL = (int) TimeUnit.MILLISECONDS.convert(30, TimeUnit.MINUTES);
     private static final Logger logger = LoggerFactory.getLogger(StandardLineageResult.class);
@@ -66,7 +66,6 @@ public class StandardLineageResult implements ComputeLineageResult, ProgressiveR
     private int numCompletedSteps = 0;
 
     private volatile boolean canceled = false;
-    private final Object completionMonitor = new Object();
 
     public StandardLineageResult(final int numSteps, final Collection<String> flowFileUuids) {
         this.numSteps = numSteps;
@@ -163,7 +162,6 @@ public class StandardLineageResult implements ComputeLineageResult, ProgressiveR
         }
     }
 
-    @Override
     public void setError(final String error) {
         writeLock.lock();
         try {
@@ -180,10 +178,7 @@ public class StandardLineageResult implements ComputeLineageResult, ProgressiveR
         }
     }
 
-    @Override
-    public void update(final Collection<ProvenanceEventRecord> records, final long totalHitCount) {
-        boolean computationComplete = false;
-
+    public void update(final Collection<ProvenanceEventRecord> records) {
         writeLock.lock();
         try {
             relevantRecords.addAll(records);
@@ -192,21 +187,11 @@ public class StandardLineageResult implements ComputeLineageResult, ProgressiveR
             updateExpiration();
 
             if (numCompletedSteps >= numSteps && error == null) {
-                computationComplete = true;
                 computeLineage();
                 computationNanos = System.nanoTime() - creationNanos;
             }
         } finally {
             writeLock.unlock();
-        }
-
-        if (computationComplete) {
-            final long computationMillis = TimeUnit.NANOSECONDS.toMillis(computationNanos);
-            logger.info("Completed computation of lineage for FlowFile UUID(s) {} comprised of {} steps in {} millis", flowFileUuids, numSteps, computationMillis);
-
-            synchronized (completionMonitor) {
-                completionMonitor.notifyAll();
-            }
         }
     }
 
@@ -216,7 +201,6 @@ public class StandardLineageResult implements ComputeLineageResult, ProgressiveR
      * useful after all of the records have been successfully obtained
      */
     private void computeLineage() {
-        logger.debug("Computing lineage with the following events: {}", relevantRecords);
         final long startNanos = System.nanoTime();
 
         nodes.clear();
@@ -339,32 +323,5 @@ public class StandardLineageResult implements ComputeLineageResult, ProgressiveR
      */
     private void updateExpiration() {
         expirationDate = new Date(System.currentTimeMillis() + TTL);
-    }
-
-    @Override
-    public boolean awaitCompletion(final long time, final TimeUnit unit) throws InterruptedException {
-        final long finishTime = System.currentTimeMillis() + unit.toMillis(time);
-        synchronized (completionMonitor) {
-            while (!isFinished()) {
-                final long millisToWait = finishTime - System.currentTimeMillis();
-                if (millisToWait > 0) {
-                    completionMonitor.wait(millisToWait);
-                } else {
-                    return isFinished();
-                }
-            }
-        }
-
-        return isFinished();
-    }
-
-    @Override
-    public long getTotalHitCount() {
-        readLock.lock();
-        try {
-            return relevantRecords.size();
-        } finally {
-            readLock.unlock();
-        }
     }
 }

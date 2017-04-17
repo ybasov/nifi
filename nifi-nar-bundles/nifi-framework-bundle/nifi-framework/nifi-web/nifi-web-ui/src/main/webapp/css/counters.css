@@ -73,7 +73,3 @@
     right: 0px;
     min-height: 150px;
 }
-
-#counters-table div.slick-viewport {
-    overflow-x: hidden !important;
-}

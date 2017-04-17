@@ -37,7 +37,6 @@ import org.apache.nifi.processor.io.InputStreamCallback;
 import org.apache.nifi.processor.util.put.AbstractPutEventProcessor;
 import org.apache.nifi.processor.util.put.sender.ChannelSender;
 import org.apache.nifi.stream.io.StreamUtils;
-import org.apache.nifi.util.StopWatch;
 
 /**
  * <p>
@@ -92,8 +91,8 @@ public class PutUDP extends AbstractPutEventProcessor {
     @Override
     protected ChannelSender createSender(final ProcessContext context) throws IOException {
         final String protocol = UDP_VALUE.getValue();
-        final String hostname = context.getProperty(HOSTNAME).evaluateAttributeExpressions().getValue();
-        final int port = context.getProperty(PORT).evaluateAttributeExpressions().asInteger();
+        final String hostname = context.getProperty(HOSTNAME).getValue();
+        final int port = context.getProperty(PORT).asInteger();
         final int bufferSize = context.getProperty(MAX_SOCKET_SEND_BUFFER_SIZE).asDataSize(DataUnit.B).intValue();
 
         return createSender(protocol, hostname, port, 0, bufferSize, null);
@@ -110,8 +109,8 @@ public class PutUDP extends AbstractPutEventProcessor {
     @Override
     protected String createTransitUri(final ProcessContext context) {
         final String protocol = UDP_VALUE.getValue();
-        final String host = context.getProperty(HOSTNAME).evaluateAttributeExpressions().getValue();
-        final String port = context.getProperty(PORT).evaluateAttributeExpressions().getValue();
+        final String host = context.getProperty(HOSTNAME).getValue();
+        final String port = context.getProperty(PORT).getValue();
 
         return new StringBuilder().append(protocol).append("://").append(host).append(":").append(port).toString();
     }
@@ -143,9 +142,7 @@ public class PutUDP extends AbstractPutEventProcessor {
 
         try {
             byte[] content = readContent(session, flowFile);
-            StopWatch stopWatch = new StopWatch(true);
             sender.send(content);
-            session.getProvenanceReporter().send(flowFile, transitUri, stopWatch.getElapsed(TimeUnit.MILLISECONDS));
             session.transfer(flowFile, REL_SUCCESS);
             session.commit();
         } catch (Exception e) {

@@ -30,7 +30,7 @@ import org.apache.nifi.authorization.AuthorizationResult;
 import org.apache.nifi.authorization.AuthorizationResult.Result;
 import org.apache.nifi.authorization.AuthorizeControllerServiceReference;
 import org.apache.nifi.authorization.Authorizer;
-import org.apache.nifi.authorization.ComponentAuthorizable;
+import org.apache.nifi.authorization.ConfigurableComponentAuthorizable;
 import org.apache.nifi.authorization.RequestAction;
 import org.apache.nifi.authorization.UserContextKeys;
 import org.apache.nifi.authorization.resource.ResourceFactory;
@@ -112,23 +112,12 @@ public class ControllerResource extends ApplicationResource {
                 .accessAttempt(true)
                 .action(action)
                 .userContext(userContext)
-                .explanationSupplier(() -> {
-                    final StringBuilder explanation = new StringBuilder("Unable to ");
-
-                    if (RequestAction.READ.equals(action)) {
-                        explanation.append("view ");
-                    } else {
-                        explanation.append("modify ");
-                    }
-                    explanation.append("the controller.");
-
-                    return explanation.toString();
-                })
                 .build();
 
         final AuthorizationResult result = authorizer.authorize(request);
         if (!Result.Approved.equals(result.getResult())) {
-            throw new AccessDeniedException(result.getExplanation());
+            final String message = StringUtils.isNotBlank(result.getExplanation()) ? result.getExplanation() : "Access is denied";
+            throw new AccessDeniedException(message);
         }
     }
 
@@ -295,24 +284,16 @@ public class ControllerResource extends ApplicationResource {
                 lookup -> {
                     authorizeController(RequestAction.WRITE);
 
-                    ComponentAuthorizable authorizable = null;
-                    try {
-                        authorizable = lookup.getConfigurableComponent(requestReportingTask.getType(), requestReportingTask.getBundle());
+                    final ConfigurableComponentAuthorizable authorizable = lookup.getReportingTaskByType(requestReportingTask.getType());
+                    if (authorizable.isRestricted()) {
+                        lookup.getRestrictedComponents().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
+                    }
 
-                        if (authorizable.isRestricted()) {
-                            lookup.getRestrictedComponents().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
-                        }
-
-                        if (requestReportingTask.getProperties() != null) {
-                            AuthorizeControllerServiceReference.authorizeControllerServiceReferences(requestReportingTask.getProperties(), authorizable, authorizer, lookup);
-                        }
-                    } finally {
-                        if (authorizable != null) {
-                            authorizable.cleanUpResources();
-                        }
+                    if (requestReportingTask.getProperties() != null) {
+                        AuthorizeControllerServiceReference.authorizeControllerServiceReferences(requestReportingTask.getProperties(), authorizable, authorizer, lookup);
                     }
                 },
-                () -> serviceFacade.verifyCreateReportingTask(requestReportingTask),
+                null,
                 (reportingTaskEntity) -> {
                     final ReportingTaskDTO reportingTask = reportingTaskEntity.getComponent();
 
@@ -401,24 +382,16 @@ public class ControllerResource extends ApplicationResource {
                 lookup -> {
                     authorizeController(RequestAction.WRITE);
 
-                    ComponentAuthorizable authorizable = null;
-                    try {
-                        authorizable = lookup.getConfigurableComponent(requestControllerService.getType(), requestControllerService.getBundle());
+                    final ConfigurableComponentAuthorizable authorizable = lookup.getControllerServiceByType(requestControllerService.getType());
+                    if (authorizable.isRestricted()) {
+                        lookup.getRestrictedComponents().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
+                    }
 
-                        if (authorizable.isRestricted()) {
-                            lookup.getRestrictedComponents().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
-                        }
-
-                        if (requestControllerService.getProperties() != null) {
-                            AuthorizeControllerServiceReference.authorizeControllerServiceReferences(requestControllerService.getProperties(), authorizable, authorizer, lookup);
-                        }
-                    } finally {
-                        if (authorizable != null) {
-                            authorizable.cleanUpResources();
-                        }
+                    if (requestControllerService.getProperties() != null) {
+                        AuthorizeControllerServiceReference.authorizeControllerServiceReferences(requestControllerService.getProperties(), authorizable, authorizer, lookup);
                     }
                 },
-                () -> serviceFacade.verifyCreateControllerService(requestControllerService),
+                null,
                 (controllerServiceEntity) -> {
                     final ControllerServiceDTO controllerService = controllerServiceEntity.getComponent();
 
@@ -528,10 +501,6 @@ public class ControllerResource extends ApplicationResource {
             throw new IllegalClusterResourceRequestException("Only a node connected to a cluster can process the request.");
         }
 
-        if (isReplicateRequest()) {
-            return replicate(HttpMethod.GET, getClusterCoordinatorNode());
-        }
-
         // get the specified relationship
         final NodeDTO dto = serviceFacade.getNode(id);
 
@@ -577,7 +546,7 @@ public class ControllerResource extends ApplicationResource {
             )
             @PathParam("id") String id,
             @ApiParam(
-                    value = "The node configuration. The only configuration that will be honored at this endpoint is the status.",
+                    value = "The node configuration. The only configuration that will be honored at this endpoint is the status or primary flag.",
                     required = true
             ) NodeEntity nodeEntity) {
 

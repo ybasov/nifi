@@ -21,19 +21,17 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 
-import org.apache.nifi.provenance.index.EventIndexSearcher;
-import org.apache.nifi.provenance.index.EventIndexWriter;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.search.IndexSearcher;
 
 public interface IndexManager extends Closeable {
-    EventIndexSearcher borrowIndexSearcher(File indexDir) throws IOException;
+    IndexSearcher borrowIndexSearcher(File indexDir) throws IOException;
 
-    EventIndexWriter borrowIndexWriter(File indexDirectory) throws IOException;
+    IndexWriter borrowIndexWriter(File indexingDirectory) throws IOException;
 
-    boolean removeIndex(final File indexDirectory);
+    void removeIndex(final File indexDirectory);
 
-    void returnIndexSearcher(EventIndexSearcher searcher);
+    void returnIndexSearcher(File indexDirectory, IndexSearcher searcher);
 
-    void returnIndexWriter(EventIndexWriter writer, boolean commit, boolean isCloseable);
-
-    void returnIndexWriter(EventIndexWriter writer);
+    void returnIndexWriter(File indexingDirectory, IndexWriter writer);
 }

@@ -16,12 +16,13 @@
  */
 package org.apache.nifi.web.dao;
 
+import java.util.Set;
+
 import org.apache.nifi.components.state.Scope;
 import org.apache.nifi.components.state.StateMap;
 import org.apache.nifi.controller.ReportingTaskNode;
-import org.apache.nifi.web.api.dto.ReportingTaskDTO;
 
-import java.util.Set;
+import org.apache.nifi.web.api.dto.ReportingTaskDTO;
 
 public interface ReportingTaskDAO {
 
@@ -32,13 +33,6 @@ public interface ReportingTaskDAO {
      * @return true if reporting task exists
      */
     boolean hasReportingTask(String reportingTaskId);
-
-    /**
-     * Determines whether this reporting task can be create.
-     *
-     * @param reportingTaskDTO dto
-     */
-    void verifyCreate(ReportingTaskDTO reportingTaskDTO);
 
     /**
      * Creates a reporting task.

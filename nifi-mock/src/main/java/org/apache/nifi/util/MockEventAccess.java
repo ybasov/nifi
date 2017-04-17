@@ -42,11 +42,6 @@ public class MockEventAccess implements EventAccess {
     }
 
     @Override
-    public ProcessGroupStatus getGroupStatus(final String groupId) {
-        return null;
-    }
-
-    @Override
     public List<ProvenanceEventRecord> getProvenanceEvents(long firstEventId, int maxRecords) throws IOException {
         if (firstEventId < 0 || maxRecords < 1) {
             throw new IllegalArgumentException();
@@ -70,7 +65,6 @@ public class MockEventAccess implements EventAccess {
         this.provenanceRecords.add(record);
     }
 
-    @Override
     public ProvenanceEventRepository getProvenanceRepository() {
         return null;
     }

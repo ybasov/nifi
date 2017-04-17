@@ -16,6 +16,3 @@ application/xml
 application/json
 text/plain
 text/csv
-avro/binary
-application/avro-binary
-application/avro+binary

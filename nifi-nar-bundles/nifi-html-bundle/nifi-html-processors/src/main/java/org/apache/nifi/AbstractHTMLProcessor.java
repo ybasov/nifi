@@ -63,12 +63,9 @@ public abstract class AbstractHTMLProcessor extends AbstractProcessor {
 
     public static final PropertyDescriptor URL = new PropertyDescriptor
             .Builder().name("URL")
-            .description("Base URL for the HTML page being parsed." +
-                    " This URL will be used to resolve an absolute URL" +
-                    " when an attribute value is extracted from a HTML element.")
+            .description("Base URL for the HTML page being parsed.")
             .required(true)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .expressionLanguageSupported(true)
             .build();
 
     public static final PropertyDescriptor CSS_SELECTOR = new PropertyDescriptor
@@ -123,20 +120,11 @@ public abstract class AbstractHTMLProcessor extends AbstractProcessor {
         session.read(inputFlowFile, new InputStreamCallback() {
             @Override
             public void process(InputStream inputStream) throws IOException {
-                final String baseUrl = getBaseUrl(inputFlowFile, context);
-                if (baseUrl == null || baseUrl.isEmpty()) {
-                    throw new RuntimeException("Base URL was empty.");
-                }
                 doc.set(Jsoup.parse(inputStream,
                         context.getProperty(HTML_CHARSET).getValue(),
-                        baseUrl));
+                        context.getProperty(URL).getValue()));
             }
         });
         return doc.get();
-    }
-
-
-    protected String getBaseUrl(final FlowFile inputFlowFile, final ProcessContext context) {
-        return "http://localhost/";
     }
 }

@@ -17,8 +17,6 @@
 package org.apache.nifi.controller.reporting;
 
 import java.util.Set;
-
-import org.apache.nifi.bundle.BundleCoordinate;
 import org.apache.nifi.controller.ReportingTaskNode;
 
 /**
@@ -33,7 +31,6 @@ public interface ReportingTaskProvider {
      * @param type the type (fully qualified class name) of the reporting task
      * to instantiate
      * @param id the identifier for the Reporting Task
-     * @param bundleCoordinate the bundle coordinate for the type of reporting task
      * @param firstTimeAdded whether or not this is the first time that the
      * reporting task is being added to the flow. I.e., this will be true only
      * when the user adds the reporting task to the flow, not when the flow is
@@ -44,7 +41,7 @@ public interface ReportingTaskProvider {
      * @throws ReportingTaskInstantiationException if unable to create the
      * Reporting Task
      */
-    ReportingTaskNode createReportingTask(String type, String id, BundleCoordinate bundleCoordinate, boolean firstTimeAdded) throws ReportingTaskInstantiationException;
+    ReportingTaskNode createReportingTask(String type, String id, boolean firstTimeAdded) throws ReportingTaskInstantiationException;
 
     /**
      * @param identifier of node
@@ -111,5 +108,4 @@ public interface ReportingTaskProvider {
      * STOPPED, or if the Reporting Task has active threads
      */
     void disableReportingTask(ReportingTaskNode reportingTask);
-
 }

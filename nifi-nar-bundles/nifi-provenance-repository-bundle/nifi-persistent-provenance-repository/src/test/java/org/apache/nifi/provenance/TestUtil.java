@@ -18,7 +18,6 @@ package org.apache.nifi.provenance;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import org.apache.nifi.flowfile.FlowFile;
 
@@ -83,22 +82,4 @@ public class TestUtil {
             }
         };
     }
-
-    public static ProvenanceEventRecord createEvent() {
-        final Map<String, String> attributes = new HashMap<>();
-        attributes.put("filename", "1.txt");
-        attributes.put("uuid", UUID.randomUUID().toString());
-
-        final ProvenanceEventBuilder builder = new StandardProvenanceEventRecord.Builder();
-        builder.setEventTime(System.currentTimeMillis());
-        builder.setEventType(ProvenanceEventType.RECEIVE);
-        builder.setTransitUri("nifi://unit-test");
-        builder.fromFlowFile(createFlowFile(3L, 3000L, attributes));
-        builder.setComponentId("1234");
-        builder.setComponentType("dummy processor");
-        final ProvenanceEventRecord record = builder.build();
-
-        return record;
-    }
-
 }

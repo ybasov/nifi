@@ -18,7 +18,6 @@ package org.apache.nifi.provenance.search;
 
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.nifi.provenance.ProvenanceEventRecord;
 
@@ -61,6 +60,4 @@ public interface QueryResult {
      * @return Indicates whether or not the query has finished running
      */
     boolean isFinished();
-
-    boolean awaitCompletion(long time, TimeUnit unit) throws InterruptedException;
 }

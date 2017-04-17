@@ -79,7 +79,6 @@ public class GhostProcessor implements Processor {
 
     @Override
     public void initialize(final ProcessorInitializationContext context) {
-
     }
 
     @Override
@@ -97,5 +96,4 @@ public class GhostProcessor implements Processor {
     public String toString() {
         return "GhostProcessor[id=" + id + "]";
     }
-
 }

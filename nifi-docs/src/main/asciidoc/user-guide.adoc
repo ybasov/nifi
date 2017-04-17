@@ -47,8 +47,6 @@ Browser Support
 Current and Current - 1 indicates that the UI is supported in the current stable release of that browser and the preceding one. For instance, if
 the current stable release is 45.X then the officially supported versions will be 45.X and 44.X.
 
-For Safari, which releases major versions much less frequently, Current and Current - 1 simply represent the two latest releases.
-
 The supported browser versions are driven by the capabilities the UI employs and the dependencies it uses. UI features will be developed and tested
 against the supported browsers. Any problem using a supported browser should be reported to Apache NiFi.
 
@@ -166,11 +164,11 @@ and configure system properties, such as how many system resources should be pro
 
 On the right side of the canvas is Search, and the Global Menu. You can use Search to easily find components on the
 canvas and can to search by component name, type, identifier, configuration properties, and their values. The Global Menu
-contains options that allow you to manipulate existing components on the canvas:
+contain options that allow you to manipulate existing components on the canvas:
 
 image::global-menu.png[NiFi Global Menu]
 
-Additionally, the UI has some features that allow you to easily navigate around the canvas. You can use the
+Additionally, the UI has allows has some features that allow you to easily navigate around the canvas. You can use the
 Navigate Palette to pan around the canvas, and to zoom in and out. The “Birds Eye View” of the dataflow provides a high-level
 view of the dataflow and allows you to pan across large portions of the dataflow. You can also find breadcrumbs along the
 bottom of the screen. As you navigate into and out of Process Groups, the breadcrumbs show
@@ -296,12 +294,10 @@ image::nifi-processor-menu.png["Processor Menu"]
 
 While the options available from the context menu vary, the following options are typically available when you have full privileges to work with a Processor:
 
-- *Configure*: This option allows the user to establish or change the configuration of the Processor (see <<Configuring_a_Processor>>).
+- *Configure*: This option allows the user to establish or change the configuration of the Processor. (See <<Configuring_a_Processor>>.)
 - *Start* or *Stop*: This option allows the user to start or stop a Processor; the option will be either Start or Stop, depending on the current state of the Processor.
-- *Status History*: This option opens a graphical representation of the Processor's statistical information over time.
-- *Upstream connections*: This option allows the user to see and "jump to" upstream connections that are coming into the Processor. This is particularly useful when processors connect into and out of other Process Groups.
-- *Downstream connections*: This option allows the user to see and "jump to" downstream connections that are going out of the Processor. This is particularly useful when processors connect into and out of other Process Groups.
-- *Data provenance*: This option displays the NiFi Data Provenance table, with information about data provenance events for the FlowFiles routed through that Processor (see <<data_provenance>>).
+- *Stats*: This option opens a graphical representation of the Processor's statistical information over time.
+- *Data provenance*: This option displays the NiFi Data Provenance table, with information about  data provenance events for the FlowFiles routed through that Processor
 - *Usage*: This option takes the user to the Processor's usage documentation.
 - *Change color*: This option allows the user to change the color of the Processor, which can make the visual management of large flows easier.
 - *Center in view*: This option centers the view of the canvas on the given Processor.
@@ -355,9 +351,7 @@ While the options available from the context menu vary, the following options ar
 - *Enter group*: This option allows the user to enter the Process Group. It is also possible to double-click on the Process Group to enter it.
 - *Start*: This option allows the user to start a Process Group.
 - *Stop*: This option allows the user to stop a Process Group.
-- *Status History*: This option opens a graphical representation of the Process Group's statistical information over time.
-- *Upstream connections*: This option allows the user to see and "jump to" upstream connections that are coming into the Process Group.
-- *Downstream connections*: This option allows the user to see and "jump to" downstream connections that are going out of the Process Group.
+- *Stats*: This option opens a graphical representation of the Process Group's statistical information over time.
 - *Center in view*: This option centers the view of the canvas on the given Process Group.
 - *Copy*: This option places a copy of the selected Process Group on the clipboard, so that it may be pasted elsewhere on the canvas by right-clicking on the canvas and selecting Paste. The Copy/Paste actions also may be done using the keystrokes Ctrl-C (Command-C) and Ctrl-V (Command-V).
 - *Delete*: This option allows the DFM to delete a Process Group.
@@ -369,13 +363,13 @@ image:iconRemoteProcessGroup.png["Remote Process Group", width=32]
 *Remote Process Group*: Remote Process Groups appear and behave similar to Process Groups. However, the Remote Process Group (RPG)
 references a remote instance of NiFi. When an RPG is dragged onto the canvas, rather than being prompted for a name, the DFM
 is prompted for the URL of the remote NiFi instance. If the remote NiFi is a clustered instance, the URL that should be used
-is the URL of any NiFi instance in that cluster. When data is transferred to a clustered instance of NiFi
-via an RPG, the RPG will first connect to the remote instance whose URL is configured to determine which nodes are in the cluster and
-how busy each node is. This information is then used to load balance the data that is pushed to each node. The remote instances are
+is the URL of the remote instance's NiFi Cluster Manager (NCM). When data is transferred to a clustered instance of NiFi
+via an RPG, the RPG will first connect to the remote instance's NCM to determine which nodes are in the cluster and
+how busy each node is. This information is then used to load balance the data that is pushed to each node. The remote NCM is
 then interrogated periodically to determine information about any nodes that are dropped from or added to the cluster and to
 recalculate the load balancing based on each node's load. For more information, see the section on <<site-to-site,Site-to-Site>>.
 
-Once you have dragged a Remote Process Group onto the canvas, you can may interact with it by right-clicking on the Remote Process Group and selecting an option from
+Once a Remote Process Group has been dragged onto the canvas, the user may interact with it by right-clicking on the Remote Process Group and selecting an option from
 context menu. The options available to you from the context menu vary, depending on the privileges assigned to you.
 
 image::nifi-rpg-menu.png["Remote Process Group Menu"]
@@ -386,7 +380,7 @@ While the options available from the context menu vary, the following options ar
 - *Remote Ports*: This option allows the user to see input ports and/or output ports that exist on the remote instance of NiFi that the Remote Process Group is connected to. Note that if the Site-to-Site configuration is secure, only the ports that the connecting NiFi has been given accessed to will be visible.
 - *Enable transmission*: Makes the transmission of data between NiFi instances active. (See <<Remote_Group_Transmission>> )
 - *Disable transmission*: Disables the transmission of data between NiFi instances.
-- *Status History*: This option opens a graphical representation of the Remote Process Group's statistical information over time.
+- *Stats*: This option opens a graphical representation of the Remote Process Group's statistical information over time.
 - *Upstream connections*: This option allows the user to see and "jump to" upstream connections that are coming into the Remote Process Group.
 - *Downstream connections*: This option allows the user to see and "jump to" downstream connections that are going out of the Remote Process Group.
 - *Refresh*: This option refreshes the view of the status of the remote NiFi instance.
@@ -497,71 +491,41 @@ image::scheduling-tab.png["Scheduling Tab"]
 
 The first configuration option is the Scheduling Strategy. There are three possible options for scheduling components:
 
-*Timer driven*: This is the default mode. The Processor will be scheduled to run on a regular interval. The interval
+* *Timer driven*: This is the default mode. The Processor will be scheduled to run on a regular interval. The interval
 	at which the Processor is run is defined by the `Run schedule' option (see below).
-
-*Event driven*: When this mode is selected, the Processor will be triggered to run by an event, and that event occurs when FlowFiles enter Connections
+* *Event driven*: When this mode is selected, the Processor will be triggered to run by an event, and that event occurs when FlowFiles enter Connections
 	feeding this Processor. This mode is currently considered experimental and is not supported by all Processors. When this mode is
 	selected, the `Run schedule' option is not configurable, as the Processor is not triggered to run periodically but
         as the result of an event. Additionally, this is the only mode for which the `Concurrent tasks'
 	option can be set to 0. In this case, the number of threads is limited only by the size of the Event-Driven Thread Pool that
 	the administrator has configured.
+* *CRON driven*: When using the CRON driven scheduling mode, the Processor is scheduled to run periodically, similar to the
+	Timer driven scheduling mode. However, the CRON driven mode provides significantly more flexibility at the expense of
+	increasing the complexity of the configuration. This value is made up of six fields, each separated by a space. These
+	fields include:
+** Seconds
+** Minutes
+** Hours
+** Day of Month
+** Month
+** Day of Week
+** Year
 
-*CRON driven*: When using the CRON driven scheduling mode, the Processor is scheduled to run periodically, similar to the
-		Timer driven scheduling mode. However, the CRON driven mode provides significantly more flexibility at the expense of
-		increasing the complexity of the configuration. The CRON driven scheduling value is a string of six required fields and one
-		optional field, each separated by a space. These fields are:
+The value for each of these fields should be a number, range, or increment.
+Range here refers to a syntax of <number>-<number>.
+For example,the Seconds field could be set to 0-30, meaning that the Processor should only be scheduled if the time is 0 to 30 seconds
+after the minute. Additionally, a value of `*` indicates that all values are valid for this field. Multiple values can also
+be entered using a `,` as a separator: `0,5,10,15,30`.
+An increment is written as <start value>/<increment>. For example, settings a value of `0/10` for the seconds fields means that valid
+values are 0, 10, 20, 30, 40, and 50. However, if we change this to `5/10`, valid values become 5, 15, 25, 35, 45, and 55.
 
-[cols="1,1", options="header"]
-|===
-|Field
-|Valid values
+For the Month field, valid values are 1 (January) through 12 (December).
+
+For the Day of Week field, valid values are 1 (Sunday) through 7 (Saturday). Additionally, a value of `L` may be appended to one of these
+values to indicate the last occurrence of this day in the month. For example, `1L` can be used to indicate the last Monday of the month.
 
 
-|Seconds
-|0-59
-
-|Minutes
-|0-59
-
-|Hours
-|0-23
-
-|Day of Month
-|1-31
-
-|Month
-|1-12 or JAN-DEC
-
-|Day of Week
-|1-7 or SUN-SAT
-
-|Year (optional)
-|empty, 1970-2099
-|===
-
-You typically specify values one of the following ways:
-
-* *Number*: Specify one or more valid value. You can enter more than one value using a comma-separated list.
-* *Range*: Specify a range using the <number>-<number> syntax.
-* *Increment*: Specify an increment using <start value>/<increment> syntax. For example, in the Minutes field, 0/15 indicates the minutes 0, 15, 30, and 45.
-
-You should also be aware of several valid special characters:
-
-* *  -- Indicates that all values are valid for that field.
-* ?  -- Indicates that no specific value is specified. This special character is valid in the Days of Month and Days of Week field.
-* L  -- You can append L to one of the Day of Week values, to specify the last occurrence of this day in the month. For
-example, 1L indicates the last Sunday of the month.
-
-For example:
-
-* The string `0 0 13 * * ?` indicates that you want to schedule the processor to run at 1:00 PM every day.
-* The string `0 20 14 ? * MON-FRI` indicates that you want to schedule the processor to run at 2:20 PM every Monday through Friday.
-* The string `0 15 10 ? * 6L 2011-2017` indicates that you want to schedule the processor to run at 10:15 AM, on the last Friday of every month, between 2011 and 2017.
-
-For additional information and examples, see the http://www.quartz-scheduler.org/documentation/quartz-2.x/tutorials/crontrigger.html[Chron Trigger Tutorial] in the Quartz documentation.
-
-Next, the Scheduling Tab provides a configuration option named `Concurrent tasks`. This controls how many threads the Processor
+Next, the Scheduling Tab provides a configuration option named `Concurrent tasks.' This controls how many threads the Processor
 will use. Said a different way, this controls how many FlowFiles should be processed by this Processor at the same time. Increasing
 this value will typically allow the Processor to handle more data in the same amount of time. However, it does this by using system
 resources that then are not usable by other Processors. This essentially provides a relative weighting of Processors -- it controls
@@ -905,7 +869,7 @@ image:nifi-connection-bend-points.png["Connection Bend Points"]
 
 Before trying to start a Processor, it's important to make sure that the Processor's configuration is valid.
 A status indicator is shown in the top-left of the Processor. If the Processor is invalid, the indicator
-will show a yellow Warning indicator with an exclamation mark indicating that there is a problem:
+will show a red Warning indicator with an exclamation mark indicating that there is a problem:
 
 image::invalid-processor.png["Invalid Processor"]
 
@@ -997,13 +961,7 @@ link:administration-guide.html[System Administrator’s Guide].
 
 image:configure-remote-process-group.png["Configure Remote Process Group"]
 
-By default, it is set to _RAW_ which uses raw socket communication using a dedicated port. _HTTP_ transport protocol is especially useful if the remote
-NiFi instance is in a restricted network that only allow access through HTTP(S) protocol or only accessible from a specific HTTP Proxy server.
-For accessing through a HTTP Proxy Server, BASIC and DIGEST authentication are supported.
-
-*Local Network Interface*: In some cases, it may be desirable to prefer one network interface over another. For example, if a wired interface and a wireless
-interface both exist, the wired interface may be preferred. This can be configured by specifying the name of the network interface to use in this box. If the
-value entered is not valid, the Remote Process Group will not be valid and will not communicate with other NiFi instances until this is resolved.
+By default, it is set to _RAW_ which uses raw socket communication using a dedicated port. _HTTP_ transport protocol is especially useful if the remote NiFi instance is in a restricted network that only allow access through HTTP(S) protocol or only accessible from a specific HTTP Proxy server. For accessing through a HTTP Proxy Server, BASIC and DIGEST authentication are supported.
 
 ==== Configure Site-to-Site server NiFi instance
 
@@ -1083,10 +1041,10 @@ In order to start a component, the following conditions must be met:
 - The component must have no active tasks. For more information about active tasks, see the ``Anatomy of ...''
 sections under <<monitoring>> (<<processor_anatomy>>, <<process_group_anatomy>>, <<remote_group_anatomy>>).
 
-Components can be started by selecting all of the components to start and then clicking the Start button (
-image:buttonStart.png["Start"]
+Components can be started by selecting all of the components to start and then clicking the Start icon (
+image:iconRun.png["Start"]
 ) in the
-Operate Palette or by right-clicking a single component and choosing Start from the context menu.
+Actions Toolbar or by right-clicking a single component and choosing Start from the context menu.
 
 If starting a Process Group, all components within that Process Group (including child Process Groups) will
 be started, with the exception of those components that are invalid or disabled.
@@ -1099,9 +1057,9 @@ image:iconRun.png["Run"]
 === Stopping a Component
 
 A component can be stopped any time that it is running. A component is stopped by right-clicking on the component
-and clicking Stop from the context menu, or by selecting the component and clicking the Stop button (
-image:buttonStop.png["Stop"]
-) in the Operate Palette.
+and clicking Stop from the context menu, or by selecting the component and clicking the Stop icon (
+image:iconStop.png["Stop"]
+) in the Actions Toolbar.
 
 If a Process Group is stopped, all of the components within the Process Group (including child Process Groups)
 will be stopped.
@@ -1123,9 +1081,9 @@ intentionally not running and those that may have been stopped temporarily (for 
 configuration) and inadvertently were never restarted.
 
 When it is desirable to re-enable a component, it can be enabled by selecting the component and
-clicking the Enable button (
-image:buttonEnable.png["Enable"]
-) in the Operate Palette. This is available only when the selected component or components are disabled.
+clicking the Enable icon (
+image:iconEnable.png["Enable"]
+) in the Actions Toolbar. This is available only when the selected component or components are disabled.
 Alternatively, a component can be enabled by checking the checkbox next  to the ``Enabled'' option in
 the Settings tab of the Processor configuration dialog or the configuration dialog for a Port.
 
@@ -1135,9 +1093,9 @@ image:iconAlert.png["Invalid"]
 image:iconStop.png["Stopped"]
 ), depending on whether or not the component is valid.
 
-A component is then disabled by selecting the component and clicking the Disable button (
-image:buttonDisable.png["Disable"]
-) in the Operate Palette, or by clearing the checkbox next to the ``Enabled'' option in the Settings tab
+A component is then disabled by selecting the component and clicking the Disable icon (
+image:iconDisable.png["Disable"]
+) in the Actions Toolbar, or by clearing the checkbox next to the ``Enabled'' option in the Settings tab
 of the Processor configuration dialog or the configuration dialog for a Port.
 
 Only Ports and Processors can be enabled and disabled.
@@ -1505,8 +1463,8 @@ The Summary page also includes the following elements:
 	may change the Process Group that the user is currently in. This icon is not available if the Summary page has been opened
 	in a new browser tab or window (by clicking the ``Pop Out'' button, as described below).
 
-- *Status History*: Clicking the Status History icon will open a new dialog that shows a historical view of the statistics that
-	are rendered for this component. See the section <<Status_History>> for more information.
+- *Stats History*: Clicking the Stats History icon will open a new dialog that shows a historical view of the statistics that
+	are rendered for this component. See the section <<Stats_History>> for more information.
 
 - *Refresh*: The Refresh button allows the user to refresh the information displayed without closing the dialog and opening it
 	again. The time at which the information was last refreshed is shown just to the right of the Refresh button. The information
@@ -1532,19 +1490,19 @@ The Summary page also includes the following elements:
 
 
 
-[[Status_History]]
+[[Stats_History]]
 === Historical Statistics of a Component
 
 While the Summary table and the canvas show numeric statistics pertaining to the performance of a component over the
 past five minutes, it is often useful to have a view of historical statistics as well. This information is available
-by right-clicking on a component and choosing the ``Status History'' menu option or by clicking on the Status History in the Summary page (see <<Summary_Page>>
+by right-clicking on a component and choosing the ``Stats'' menu option or by clicking on the Stats History in the Summary page (see <<Summary_Page>>
 for more information).
 
 The amount of historical information that is stored is configurable in the NiFi properties but defaults to 24 hours. For specific
 configuration information reference the Component Status Repository of the link:administration-guide.html[System Administrator’s Guide].
-When the Status History dialog is opened, it provides a graph of historical statistics:
+When the Stats dialog is opened, it provides a graph of historical statistics:
 
-image::stats-history.png["Status History"]
+image::stats-history.png["Stats History"]
 
 The left-hand side of the dialog provides information about the component that the stats are for, as well as a textual
 representation of the statistics being graphed. The following information is provided on the left-hand side:
@@ -1678,7 +1636,10 @@ image:iconDelete.png["Delete"]
 ). This will prompt for confirmation. After confirming the deletion, the Template will be removed from this table
 and will no longer be available to add to the canvas.
 
-[[data_provenance]]
+
+
+
+
 == Data Provenance
 While monitoring a dataflow, users often need a way to determine what happened to a particular data object (FlowFile).
 NiFi's Data Provenance page provides that information. Because NiFi records and indexes data provenance details
@@ -1695,36 +1656,11 @@ replay data at any point within the dataflow, and see a graphical representation
 
 image:provenance-annotated.png["Provenance Table"]
 
-[[provenance_events]]
-=== Provenance Events
-
-Each point in a dataflow where a FlowFile is processed in some way is considered a 'provenance event'. Various types of provenance
+Each point in a dataflow where a FlowFile is processed in some way is considered a "processing event". Various types of processing
 events occur, depending on the dataflow design. For example, when data is brought into the flow, a RECEIVE event occurs, and when
 data is sent out of the flow, a SEND event occurs. Other types of processing events may occur, such as if the data is cloned (CLONE event), routed (ROUTE event), modified (CONTENT_MODIFIED or ATTRIBUTES_MODIFIED event),
 split (FORK event), combined with other data objects (JOIN event), and ultimately removed from the flow (DROP event).
 
-The provenance event types are:
-
-[options="header"]
-|======================
-|Provenance Event        |Description
-|ADDINFO                 |Indicates a provenance event when additional information such as a new linkage to a new URI or UUID is added
-|ATTRIBUTES_MODIFIED     |Indicates that a FlowFile's attributes were modified in some way
-|CLONE                   |Indicates that a FlowFile is an exact duplicate of its parent FlowFile
-|CONTENT_MODIFIED        |Indicates that a FlowFile's content was modified in some way
-|CREATE                  |Indicates that a FlowFile was generated from data that was not received from a remote system or external process
-|DOWNLOAD                |Indicates that the contents of a FlowFile were downloaded by a user or external entity
-|DROP                    |Indicates a provenance event for the conclusion of an object's life for some reason other than object expiration
-|EXPIRE                  |Indicates a provenance event for the conclusion of an object's life due to the object not being processed in a timely manner
-|FETCH                   |Indicates that the contents of a FlowFile were overwritten using the contents of some external resource
-|FORK                    |Indicates that one or more FlowFiles were derived from a parent FlowFile
-|JOIN                    |Indicates that a single FlowFile is derived from joining together multiple parent FlowFiles
-|RECEIVE                 |Indicates a provenance event for receiving data from an external process
-|REPLAY                  |Indicates a provenance event for replaying a FlowFile
-|ROUTE                   |Indicates that a FlowFile was routed to a specified relationship and provides information about why the FlowFile was routed to this relationship
-|SEND                    |Indicates a provenance event for sending data to an external process
-|UNKNOWN                 |Indicates that the type of provenance event is unknown because the user who is attempting to access the event is not authorized to know the type
-|======================
 
 === Searching for Events
 One of the most common tasks performed in the Data Provenance page is a search for a given FlowFile to determine what happened to it. To do this,

@@ -57,7 +57,7 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
 
     private StandardFlowFileRecord(final Builder builder) {
         this.id = builder.bId;
-        this.attributes = builder.bAttributes == null ? Collections.emptyMap() : builder.bAttributes;
+        this.attributes = builder.bAttributes;
         this.entryDate = builder.bEntryDate;
         this.lineageStartDate = builder.bLineageStartDate;
         this.lineageStartIndex = builder.bLineageStartIndex;
@@ -145,11 +145,11 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
         if (this == other) {
             return true;
         }
-        if (!(other instanceof FlowFile)) {
+        if (!(other instanceof StandardFlowFileRecord)) {
             return false;
         }
-        final FlowFile otherRecord = (FlowFile) other;
-        return new EqualsBuilder().append(id, otherRecord.getId()).isEquals();
+        final StandardFlowFileRecord otherRecord = (StandardFlowFileRecord) other;
+        return new EqualsBuilder().append(id, otherRecord.id).isEquals();
     }
 
     @Override
@@ -176,12 +176,11 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
         private final Set<String> bLineageIdentifiers = new HashSet<>();
         private long bPenaltyExpirationMs = -1L;
         private long bSize = 0L;
+        private final Map<String, String> bAttributes = new HashMap<>();
         private ContentClaim bClaim = null;
         private long bClaimOffset = 0L;
         private long bLastQueueDate = System.currentTimeMillis();
         private long bQueueDateIndex = 0L;
-        private Map<String, String> bAttributes;
-        private boolean bAttributesCopied = false;
 
         public Builder id(final long id) {
             bId = id;
@@ -211,28 +210,14 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
             return this;
         }
 
-        private Map<String, String> initializeAttributes() {
-            if (bAttributes == null) {
-                bAttributes = new HashMap<>();
-                bAttributesCopied = true;
-            } else if (!bAttributesCopied) {
-                bAttributes = new HashMap<>(bAttributes);
-                bAttributesCopied = true;
-            }
-
-            return bAttributes;
-        }
-
         public Builder addAttribute(final String key, final String value) {
             if (key != null && value != null) {
-                initializeAttributes().put(FlowFile.KeyValidator.validateKey(key), value);
+                bAttributes.put(FlowFile.KeyValidator.validateKey(key), value);
             }
             return this;
         }
 
         public Builder addAttributes(final Map<String, String> attributes) {
-            final Map<String, String> initializedAttributes = initializeAttributes();
-
             if (null != attributes) {
                 for (final String key : attributes.keySet()) {
                     FlowFile.KeyValidator.validateKey(key);
@@ -241,7 +226,7 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
                     final String key = entry.getKey();
                     final String value = entry.getValue();
                     if (key != null && value != null) {
-                        initializedAttributes.put(key, value);
+                        bAttributes.put(key, value);
                     }
                 }
             }
@@ -255,7 +240,7 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
                         continue;
                     }
 
-                    initializeAttributes().remove(key);
+                    bAttributes.remove(key);
                 }
             }
             return this;
@@ -268,7 +253,7 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
                         continue;
                     }
 
-                    initializeAttributes().remove(key);
+                    bAttributes.remove(key);
                 }
             }
             return this;
@@ -276,7 +261,7 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
 
         public Builder removeAttributes(final Pattern keyPattern) {
             if (keyPattern != null) {
-                final Iterator<String> iterator = initializeAttributes().keySet().iterator();
+                final Iterator<String> iterator = bAttributes.keySet().iterator();
                 while (iterator.hasNext()) {
                     final String key = iterator.next();
 
@@ -319,8 +304,7 @@ public final class StandardFlowFileRecord implements FlowFile, FlowFileRecord {
             bLineageIdentifiers.clear();
             bPenaltyExpirationMs = specFlowFile.getPenaltyExpirationMillis();
             bSize = specFlowFile.getSize();
-            bAttributes = specFlowFile.getAttributes();
-            bAttributesCopied = false;
+            bAttributes.putAll(specFlowFile.getAttributes());
             bClaim = specFlowFile.getContentClaim();
             bClaimOffset = specFlowFile.getContentClaimOffset();
             bLastQueueDate = specFlowFile.getLastQueueDate();

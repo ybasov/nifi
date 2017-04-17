@@ -16,7 +16,7 @@
  */
 'use strict';
 
-var TransformJsonController = function ($scope, $state, $q, $mdDialog, $timeout, TransformJsonService, ProcessorService, details) {
+var TransformJsonController = function ($scope, $state, $q, TransformJsonService, ProcessorService, details) {
 
     $scope.processorId = '';
     $scope.clientId = '';
@@ -32,8 +32,6 @@ var TransformJsonController = function ($scope, $state, $q, $mdDialog, $timeout,
     $scope.disableCSS = '';
     $scope.saveStatus = '';
     $scope.specUpdated = false;
-    $scope.variables = {};
-    $scope.joltVariables = {};
 
     $scope.convertToArray= function (map){
         var labelValueArray = [];
@@ -263,8 +261,7 @@ var TransformJsonController = function ($scope, $state, $q, $mdDialog, $timeout,
             "specification" : jsonSpec,
             "input" : jsonInput,
             "customClass" : $scope.customClass,
-            "modules": $scope.modules,
-            "expressionLanguageAttributes":$scope.joltVariables
+            "modules": $scope.modules
         };
     };
 
@@ -364,45 +361,8 @@ var TransformJsonController = function ($scope, $state, $q, $mdDialog, $timeout,
 
     };
 
-    $scope.addVariable = function(variables,key,value){
-        if(key != '' && value != ''){
-            variables[key] = value;
-        }
-
-        $timeout(function() {
-            var scroller = document.getElementById("variableList");
-            scroller.scrollTop = scroller.scrollHeight;
-        }, 0, false);
-    }
-
-    $scope.deleteVariable = function(variables,key){
-        delete variables[key];
-    }
-
-    $scope.saveVariables = function(variables){
-        angular.copy($scope.variables,$scope.joltVariables);
-        $scope.cancelDialog();
-    }
-
-    $scope.cancelDialog = function(){
-        $mdDialog.cancel();
-    }
-
-    $scope.showVariableDialog = function(ev) {
-        angular.copy($scope.joltVariables, $scope.variables);
-        $mdDialog.show({
-            locals: {parent: $scope},
-            controller: angular.noop,
-            controllerAs: 'dialogCtl',
-            bindToController: true,
-            templateUrl: 'app/transformjson/variable-dialog-template.html',
-            targetEvent: ev,
-            clickOutsideToClose: false
-        });
-
-    };
-
     $scope.initController = function(params){
+
         $scope.processorId = params.id;
         $scope.clientId = params.clientId;
         $scope.revisionId = params.revision;
@@ -416,6 +376,7 @@ var TransformJsonController = function ($scope, $state, $q, $mdDialog, $timeout,
                 });
             });
         }
+
     };
 
     $scope.$watch("specEditor", function (newValue, oldValue ) {
@@ -424,7 +385,8 @@ var TransformJsonController = function ($scope, $state, $q, $mdDialog, $timeout,
 
     $scope.initController($state.params);
 
+
 };
 
-TransformJsonController.$inject = ['$scope', '$state', '$q','$mdDialog','$timeout','TransformJsonService', 'ProcessorService','details'];
+TransformJsonController.$inject = ['$scope', '$state', '$q', 'TransformJsonService', 'ProcessorService','details'];
 angular.module('standardUI').controller('TransformJsonController', TransformJsonController);

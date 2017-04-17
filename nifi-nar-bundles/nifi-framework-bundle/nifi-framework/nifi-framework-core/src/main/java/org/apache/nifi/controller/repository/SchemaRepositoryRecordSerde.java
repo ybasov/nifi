@@ -45,9 +45,9 @@ import org.wali.UpdateType;
 
 public class SchemaRepositoryRecordSerde extends RepositoryRecordSerde implements SerDe<RepositoryRecord> {
     private static final Logger logger = LoggerFactory.getLogger(SchemaRepositoryRecordSerde.class);
-    private static final int MAX_ENCODING_VERSION = 2;
+    private static final int MAX_ENCODING_VERSION = 1;
 
-    private final RecordSchema writeSchema = RepositoryRecordSchema.REPOSITORY_RECORD_SCHEMA_V2;
+    private final RecordSchema writeSchema = RepositoryRecordSchema.REPOSITORY_RECORD_SCHEMA_V1;
     private final RecordSchema contentClaimSchema = ContentClaimSchema.CONTENT_CLAIM_SCHEMA_V1;
 
     private final ResourceClaimManager resourceClaimManager;
@@ -73,29 +73,25 @@ public class SchemaRepositoryRecordSerde extends RepositoryRecordSerde implement
         switch (record.getType()) {
             case CREATE:
             case UPDATE:
-                schema = RepositoryRecordSchema.CREATE_OR_UPDATE_SCHEMA_V2;
+                schema = RepositoryRecordSchema.CREATE_OR_UPDATE_SCHEMA_V1;
                 break;
             case CONTENTMISSING:
             case DELETE:
-                schema = RepositoryRecordSchema.DELETE_SCHEMA_V2;
+                schema = RepositoryRecordSchema.DELETE_SCHEMA_V1;
                 break;
             case SWAP_IN:
-                schema = RepositoryRecordSchema.SWAP_IN_SCHEMA_V2;
+                schema = RepositoryRecordSchema.SWAP_IN_SCHEMA_V1;
                 break;
             case SWAP_OUT:
-                schema = RepositoryRecordSchema.SWAP_OUT_SCHEMA_V2;
+                schema = RepositoryRecordSchema.SWAP_OUT_SCHEMA_V1;
                 break;
             default:
                 throw new IllegalArgumentException("Received Repository Record with unknown Update Type: " + record.getType()); // won't happen.
         }
 
-        serializeRecord(record, out, schema, RepositoryRecordSchema.REPOSITORY_RECORD_SCHEMA_V2);
-    }
-
-
-    protected void serializeRecord(final RepositoryRecord record, final DataOutputStream out, RecordSchema schema, RecordSchema repositoryRecordSchema) throws IOException {
         final RepositoryRecordFieldMap fieldMap = new RepositoryRecordFieldMap(record, schema, contentClaimSchema);
-        final RepositoryRecordUpdate update = new RepositoryRecordUpdate(fieldMap, repositoryRecordSchema);
+        final RepositoryRecordUpdate update = new RepositoryRecordUpdate(fieldMap, RepositoryRecordSchema.REPOSITORY_RECORD_SCHEMA_V1);
+
         new SchemaRecordWriter().writeRecord(update, out);
     }
 
@@ -113,14 +109,10 @@ public class SchemaRepositoryRecordSerde extends RepositoryRecordSerde implement
     public RepositoryRecord deserializeRecord(final DataInputStream in, final int version) throws IOException {
         final SchemaRecordReader reader = SchemaRecordReader.fromSchema(recoverySchema);
         final Record updateRecord = reader.readRecord(in);
-        if (updateRecord == null) {
-            // null may be returned by reader.readRecord() if it encounters end-of-stream
-            return null;
-        }
 
         // Top level is always going to be a "Repository Record Update" record because we need a 'Union' type record at the
         // top level that indicates which type of record we have.
-        final Record record = (Record) updateRecord.getFieldValue(RepositoryRecordSchema.REPOSITORY_RECORD_UPDATE_V2);
+        final Record record = (Record) updateRecord.getFieldValue(RepositoryRecordSchema.REPOSITORY_RECORD_UPDATE_V1);
 
         final String actionType = (String) record.getFieldValue(RepositoryRecordSchema.ACTION_TYPE_FIELD);
         final UpdateType updateType = UpdateType.valueOf(actionType);

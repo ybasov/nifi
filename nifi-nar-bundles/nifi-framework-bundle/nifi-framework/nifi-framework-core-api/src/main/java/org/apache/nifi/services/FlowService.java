@@ -103,19 +103,11 @@ public interface FlowService extends LifeCycle {
     void copyCurrentFlow(OutputStream os) throws IOException;
 
     /**
-     * Creates a DataFlow object by first looking for a flow on from disk, and falling back to the controller's flow otherwise.
+     * Creates a DataFlow object from the current flow
      *
      * @return the created DataFlow object
      *
      * @throws IOException if unable to read the flow from disk
      */
     DataFlow createDataFlow() throws IOException;
-
-    /**
-     * Creates a DataFlow object by serializing the flow controller's flow.
-     *
-     * @return the created DataFlow object.
-     */
-    DataFlow createDataFlowFromController() throws IOException;
-
 }

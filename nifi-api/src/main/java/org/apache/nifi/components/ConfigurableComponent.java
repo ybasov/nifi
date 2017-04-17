@@ -80,5 +80,4 @@ public interface ConfigurableComponent {
      * component
      */
     String getIdentifier();
-
 }

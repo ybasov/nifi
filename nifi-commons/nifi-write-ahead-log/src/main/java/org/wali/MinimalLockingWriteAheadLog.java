@@ -18,9 +18,6 @@ package org.wali;
 
 import static java.util.Objects.requireNonNull;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -58,9 +55,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Pattern;
 
+import org.apache.nifi.stream.io.BufferedInputStream;
+import org.apache.nifi.stream.io.BufferedOutputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -230,7 +230,7 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
                         final long transactionId = transactionIdGenerator.getAndIncrement();
                         if (logger.isTraceEnabled()) {
                             for (final T record : records) {
-                                logger.trace("Partition {} performing Transaction {}: {}", new Object[] {partition, transactionId, record});
+                                logger.trace("Partition {} performing Transaction {}: {}", new Object[]{partition, transactionId, record});
                             }
                         }
 
@@ -569,7 +569,7 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
 
             // perform checkpoint, writing to .partial file
             fileOut = new FileOutputStream(partialPath.toFile());
-            dataOut = new DataOutputStream(new BufferedOutputStream(fileOut));
+            dataOut = new DataOutputStream(fileOut);
             dataOut.writeUTF(MinimalLockingWriteAheadLog.class.getName());
             dataOut.writeInt(getVersion());
             dataOut.writeUTF(serde.getClass().getName());
@@ -590,12 +590,9 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
         } finally {
             if (dataOut != null) {
                 try {
-                    try {
-                        dataOut.flush();
-                        fileOut.getFD().sync();
-                    } finally {
-                        dataOut.close();
-                    }
+                    dataOut.flush();
+                    fileOut.getFD().sync();
+                    dataOut.close();
                 } catch (final IOException e) {
                     logger.warn("Failed to close Data Stream due to {}", e.toString(), e);
                 }
@@ -673,10 +670,11 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
         private final Path editDirectory;
         private final int writeAheadLogVersion;
 
+        private final Lock lock = new ReentrantLock();
         private DataOutputStream dataOut = null;
         private FileOutputStream fileOut = null;
-        private volatile boolean blackListed = false;
-        private volatile boolean closed = false;
+        private boolean blackListed = false;
+        private boolean closed = false;
         private DataInputStream recoveryIn;
         private int recoveryVersion;
         private String currentJournalFilename = "";
@@ -709,15 +707,26 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
         }
 
         public boolean tryClaim() {
-            return !blackListed;
+            final boolean obtainedLock = lock.tryLock();
+            if (!obtainedLock) {
+                return false;
+            }
+
+            // Check if the partition is blacklisted. If so, unlock it and return false. Otherwise,
+            // leave it locked and return true, so that the caller will need to unlock.
+            if (blackListed) {
+                lock.unlock();
+                return false;
+            }
+
+            return true;
         }
 
         public void releaseClaim() {
+            lock.unlock();
         }
 
         public void close() {
-            this.closed = true;
-
             // Note that here we are closing fileOut and NOT dataOut.
             // This is very much intentional, not an oversight. This is done because of
             // the way that the OutputStreams are structured. dataOut wraps a BufferedOutputStream,
@@ -752,12 +761,18 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
                 }
             }
 
+            this.closed = true;
             this.dataOut = null;
             this.fileOut = null;
         }
 
         public void blackList() {
-            blackListed = true;
+            lock.lock();
+            try {
+                blackListed = true;
+            } finally {
+                lock.unlock();
+            }
             logger.debug("Blacklisted {}", this);
         }
 
@@ -768,50 +783,55 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
          * @throws IOException if failure to rollover
          */
         public OutputStream rollover() throws IOException {
-            // Note that here we are closing fileOut and NOT dataOut. See the note in the close()
-            // method to understand the logic behind this.
-            final OutputStream oldOutputStream = fileOut;
-            dataOut = null;
-            fileOut = null;
-
-            this.serde = serdeFactory.createSerDe(null);
-            final Path editPath = getNewEditPath();
-            final FileOutputStream fos = new FileOutputStream(editPath.toFile());
+            lock.lock();
             try {
-                final DataOutputStream outStream = new DataOutputStream(new BufferedOutputStream(fos));
-                outStream.writeUTF(MinimalLockingWriteAheadLog.class.getName());
-                outStream.writeInt(writeAheadLogVersion);
-                outStream.writeUTF(serde.getClass().getName());
-                outStream.writeInt(serde.getVersion());
-                serde.writeHeader(outStream);
-
-                outStream.flush();
-                dataOut = outStream;
-                fileOut = fos;
-            } catch (final IOException ioe) {
-                try {
-                    oldOutputStream.close();
-                } catch (final IOException ioe2) {
-                    ioe.addSuppressed(ioe2);
-                }
-
-                logger.error("Failed to create new journal for {} due to {}", new Object[] {this, ioe.toString()}, ioe);
-                try {
-                    fos.close();
-                } catch (final IOException innerIOE) {
-                }
-
+                // Note that here we are closing fileOut and NOT dataOut. See the note in the close()
+                // method to understand the logic behind this.
+                final OutputStream oldOutputStream = fileOut;
                 dataOut = null;
                 fileOut = null;
-                blackList();
 
-                throw ioe;
+                this.serde = serdeFactory.createSerDe(null);
+                final Path editPath = getNewEditPath();
+                final FileOutputStream fos = new FileOutputStream(editPath.toFile());
+                try {
+                    final DataOutputStream outStream = new DataOutputStream(new BufferedOutputStream(fos));
+                    outStream.writeUTF(MinimalLockingWriteAheadLog.class.getName());
+                    outStream.writeInt(writeAheadLogVersion);
+                    outStream.writeUTF(serde.getClass().getName());
+                    outStream.writeInt(serde.getVersion());
+                    serde.writeHeader(outStream);
+
+                    outStream.flush();
+                    dataOut = outStream;
+                    fileOut = fos;
+                } catch (final IOException ioe) {
+                    try {
+                        oldOutputStream.close();
+                    } catch (final IOException ioe2) {
+                        ioe.addSuppressed(ioe2);
+                    }
+
+                    logger.error("Failed to create new journal for {} due to {}", new Object[] {this, ioe.toString()}, ioe);
+                    try {
+                        fos.close();
+                    } catch (final IOException innerIOE) {
+                    }
+
+                    dataOut = null;
+                    fileOut = null;
+                    blackList();
+
+                    throw ioe;
+                }
+
+                currentJournalFilename = editPath.toFile().getName();
+
+                blackListed = false;
+                return oldOutputStream;
+            } finally {
+                lock.unlock();
             }
-
-            currentJournalFilename = editPath.toFile().getName();
-
-            blackListed = false;
-            return oldOutputStream;
         }
 
         private long getJournalIndex(final File file) {
@@ -919,39 +939,33 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
             return true;
         }
 
-        public void update(final Collection<S> records, final long transactionId, final Map<Object, S> recordMap, final boolean forceSync) throws IOException {
-            try (final ByteArrayOutputStream baos = new ByteArrayOutputStream(256);
-                final DataOutputStream out = new DataOutputStream(baos)) {
+        public void update(final Collection<S> records, final long transactionId, final Map<Object, S> recordMap, final boolean forceSync)
+                throws IOException {
+            if (this.closed) {
+                throw new IllegalStateException("Partition is closed");
+            }
 
-                out.writeLong(transactionId);
-                final int numEditsToSerialize = records.size();
-                int editsSerialized = 0;
-                for (final S record : records) {
-                    final Object recordId = serde.getRecordIdentifier(record);
-                    final S previousVersion = recordMap.get(recordId);
+            final DataOutputStream out = dataOut;
+            out.writeLong(transactionId);
 
-                    serde.serializeEdit(previousVersion, record, out);
-                    if (++editsSerialized < numEditsToSerialize) {
-                        out.write(TRANSACTION_CONTINUE);
-                    } else {
-                        out.write(TRANSACTION_COMMIT);
-                    }
+            final int numEditsToSerialize = records.size();
+            int editsSerialized = 0;
+            for (final S record : records) {
+                final Object recordId = serde.getRecordIdentifier(record);
+                final S previousVersion = recordMap.get(recordId);
+
+                serde.serializeEdit(previousVersion, record, out);
+                if (++editsSerialized < numEditsToSerialize) {
+                    out.write(TRANSACTION_CONTINUE);
+                } else {
+                    out.write(TRANSACTION_COMMIT);
                 }
+            }
 
-                out.flush();
+            out.flush();
 
-                if (this.closed) {
-                    throw new IllegalStateException("Partition is closed");
-                }
-
-                baos.writeTo(dataOut);
-                dataOut.flush();
-
-                if (forceSync) {
-                    synchronized (fileOut) {
-                        fileOut.getFD().sync();
-                    }
-                }
+            if (forceSync) {
+                fileOut.getFD().sync();
             }
         }
 
@@ -973,28 +987,24 @@ public final class MinimalLockingWriteAheadLog<T> implements WriteAheadRepositor
                 logger.debug("{} recovering from {}", this, nextRecoveryPath);
                 recoveryIn = createDataInputStream(nextRecoveryPath);
                 if (hasMoreData(recoveryIn)) {
-                    try {
-                        final String waliImplementationClass = recoveryIn.readUTF();
-                        if (!MinimalLockingWriteAheadLog.class.getName().equals(waliImplementationClass)) {
-                            continue;
-                        }
-
-                        final long waliVersion = recoveryIn.readInt();
-                        if (waliVersion > writeAheadLogVersion) {
-                            throw new IOException("Cannot recovery from file " + nextRecoveryPath + " because it was written using "
-                                + "WALI version " + waliVersion + ", but the version used to restore it is only " + writeAheadLogVersion);
-                        }
-
-                        final String serdeEncoding = recoveryIn.readUTF();
-                        this.recoveryVersion = recoveryIn.readInt();
-                        serde = serdeFactory.createSerDe(serdeEncoding);
-
-                        serde.readHeader(recoveryIn);
-                        break;
-                    } catch (final Exception e) {
-                        logger.warn("Failed to recover data from Write-Ahead Log for {} because the header information could not be read properly. "
-                            + "This often is the result of the file not being fully written out before the application is restarted. This file will be ignored.", nextRecoveryPath);
+                    final String waliImplementationClass = recoveryIn.readUTF();
+                    if (!MinimalLockingWriteAheadLog.class.getName().equals(waliImplementationClass)) {
+                        continue;
                     }
+
+                    final long waliVersion = recoveryIn.readInt();
+                    if (waliVersion > writeAheadLogVersion) {
+                        throw new IOException("Cannot recovery from file " + nextRecoveryPath + " because it was written using "
+                                + "WALI version " + waliVersion + ", but the version used to restore it is only " + writeAheadLogVersion);
+                    }
+
+                    final String serdeEncoding = recoveryIn.readUTF();
+                    this.recoveryVersion = recoveryIn.readInt();
+                    serde = serdeFactory.createSerDe(serdeEncoding);
+
+                    serde.readHeader(recoveryIn);
+
+                    break;
                 }
             }
 

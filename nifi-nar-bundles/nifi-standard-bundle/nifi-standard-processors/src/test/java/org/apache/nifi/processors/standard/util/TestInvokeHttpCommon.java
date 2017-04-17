@@ -33,6 +33,7 @@ import org.eclipse.jetty.server.Authentication;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.handler.AbstractHandler;
+import org.eclipse.jetty.util.security.Password;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -448,35 +449,6 @@ public abstract class TestInvokeHttpCommon {
     }
 
     @Test
-    public void testNoInputWithAttributes() throws Exception {
-        addHandler(new GetOrHeadHandler());
-
-        runner.setProperty(InvokeHTTP.PROP_URL, url + "/status/200");
-        runner.setProperty(InvokeHTTP.PROP_METHOD, "GET");
-        runner.setProperty(InvokeHTTP.PROP_ATTRIBUTES_TO_SEND, "myAttribute");
-        runner.setIncomingConnection(false);
-        runner.setNonLoopConnection(false);
-
-        runner.run();
-
-        runner.assertTransferCount(InvokeHTTP.REL_SUCCESS_REQ, 0);
-        runner.assertTransferCount(InvokeHTTP.REL_RESPONSE, 1);
-        runner.assertTransferCount(InvokeHTTP.REL_RETRY, 0);
-        runner.assertTransferCount(InvokeHTTP.REL_NO_RETRY, 0);
-        runner.assertTransferCount(InvokeHTTP.REL_FAILURE, 0);
-        runner.assertPenalizeCount(0);
-
-        // expected in response
-        // status code, status message, all headers from server response --> ff attributes
-        // server response message body into payload of ff
-        final MockFlowFile bundle1 = runner.getFlowFilesForRelationship(InvokeHTTP.REL_RESPONSE).get(0);
-        bundle1.assertContentEquals("/status/200".getBytes("UTF-8"));
-        bundle1.assertAttributeEquals(InvokeHTTP.STATUS_CODE, "200");
-        bundle1.assertAttributeEquals(InvokeHTTP.STATUS_MESSAGE, "OK");
-        bundle1.assertAttributeEquals("Content-Type", "text/plain;charset=iso-8859-1");
-    }
-
-    @Test
     public void testNoInputFail() throws Exception {
         addHandler(new GetOrHeadHandler());
 
@@ -704,12 +676,14 @@ public abstract class TestInvokeHttpCommon {
         final String response = bundle.getAttribute(InvokeHTTP.RESPONSE_BODY);
         assertEquals("<html>\n" +
                 "<head>\n" +
-                "<meta http-equiv=\"Content-Type\" content=\"text/html;charset=utf-8\"/>\n" +
-                "<title>Error 401 Unauthorized</title>\n" +
+                "<meta http-equiv=\"Content-Type\" content=\"text/html;charset=ISO-8859-1\"/>\n" +
+                "<title>Error 401 </title>\n" +
                 "</head>\n" +
-                "<body><h2>HTTP ERROR 401</h2>\n" +
+                "<body>\n" +
+                "<h2>HTTP ERROR: 401</h2>\n" +
                 "<p>Problem accessing /status/200. Reason:\n" +
-                "<pre>    Unauthorized</pre></p><hr><a href=\"http://eclipse.org/jetty\">Powered by Jetty:// 9.4.2.v20170220</a><hr/>\n\n" +
+                "<pre>    Unauthorized</pre></p>\n" +
+                "<hr /><a href=\"http://eclipse.org/jetty\">Powered by Jetty:// 9.3.9.v20160517</a><hr/>\n" +
                 "</body>\n" +
                 "</html>\n", response);
     }
@@ -1112,93 +1086,6 @@ public abstract class TestInvokeHttpCommon {
     }
 
     @Test
-    public void testPatch() throws Exception {
-        addHandler(new MutativeMethodHandler(MutativeMethod.PATCH));
-
-        runner.setProperty(InvokeHTTP.PROP_METHOD, "PATCH");
-        runner.setProperty(InvokeHTTP.PROP_URL, url + "/patch");
-
-        createFlowFiles(runner);
-
-        runner.run();
-        runner.assertTransferCount(InvokeHTTP.REL_SUCCESS_REQ, 1);
-        runner.assertTransferCount(InvokeHTTP.REL_RESPONSE, 1);
-        runner.assertTransferCount(InvokeHTTP.REL_RETRY, 0);
-        runner.assertTransferCount(InvokeHTTP.REL_NO_RETRY, 0);
-        runner.assertTransferCount(InvokeHTTP.REL_FAILURE, 0);
-        runner.assertPenalizeCount(0);
-
-        final MockFlowFile bundle = runner.getFlowFilesForRelationship(InvokeHTTP.REL_SUCCESS_REQ).get(0);
-        bundle.assertContentEquals("Hello".getBytes("UTF-8"));
-        bundle.assertAttributeEquals(InvokeHTTP.STATUS_CODE, "200");
-        bundle.assertAttributeEquals(InvokeHTTP.STATUS_MESSAGE, "OK");
-        bundle.assertAttributeEquals("Foo", "Bar");
-
-        final MockFlowFile bundle1 = runner.getFlowFilesForRelationship(InvokeHTTP.REL_RESPONSE).get(0);
-        bundle1.assertContentEquals("".getBytes("UTF-8"));
-        bundle1.assertAttributeEquals(InvokeHTTP.STATUS_CODE, "200");
-        bundle1.assertAttributeEquals(InvokeHTTP.STATUS_MESSAGE, "OK");
-        bundle1.assertAttributeEquals("Foo", "Bar");
-        bundle1.assertAttributeNotExists("Content-Type");
-
-        final String actual1 = new String(bundle1.toByteArray(), StandardCharsets.UTF_8);
-        final String expected1 = "";
-        Assert.assertEquals(expected1, actual1);
-    }
-
-    @Test
-    public void testPatchWithMimeType() throws Exception {
-        final String suppliedMimeType = "text/plain";
-        addHandler(new MutativeMethodHandler(MutativeMethod.PATCH, suppliedMimeType));
-
-        runner.setProperty(InvokeHTTP.PROP_METHOD, "PATCH");
-        runner.setProperty(InvokeHTTP.PROP_URL, url + "/patch");
-
-        final Map<String, String> attrs = new HashMap<>();
-
-        attrs.put(CoreAttributes.MIME_TYPE.key(), suppliedMimeType);
-        runner.enqueue("Hello".getBytes(), attrs);
-
-        runner.run(1);
-        runner.assertTransferCount(InvokeHTTP.REL_SUCCESS_REQ, 1);
-        runner.assertTransferCount(InvokeHTTP.REL_RESPONSE, 1);
-    }
-
-    @Test
-    public void testPatchWithEmptyELExpression() throws Exception {
-        addHandler(new MutativeMethodHandler(MutativeMethod.PATCH, InvokeHTTP.DEFAULT_CONTENT_TYPE));
-
-        runner.setProperty(InvokeHTTP.PROP_METHOD, "PATCH");
-        runner.setProperty(InvokeHTTP.PROP_URL, url + "/patch");
-
-        final Map<String, String> attrs = new HashMap<>();
-        attrs.put(CoreAttributes.MIME_TYPE.key(), "");
-        runner.enqueue("Hello".getBytes(), attrs);
-
-        runner.run(1);
-        runner.assertTransferCount(InvokeHTTP.REL_SUCCESS_REQ, 1);
-        runner.assertTransferCount(InvokeHTTP.REL_RESPONSE, 1);
-    }
-
-    @Test
-    public void testPatchWithContentTypeProperty() throws Exception {
-        final String suppliedMimeType = "text/plain";
-        addHandler(new MutativeMethodHandler(MutativeMethod.PATCH, suppliedMimeType));
-
-        runner.setProperty(InvokeHTTP.PROP_METHOD, "PATCH");
-        runner.setProperty(InvokeHTTP.PROP_URL, url + "/patch");
-        runner.setProperty(InvokeHTTP.PROP_CONTENT_TYPE, suppliedMimeType);
-
-        final Map<String, String> attrs = new HashMap<>();
-        attrs.put(CoreAttributes.MIME_TYPE.key(), "text/csv");
-        runner.enqueue("Hello".getBytes(), attrs);
-
-        runner.run(1);
-        runner.assertTransferCount(InvokeHTTP.REL_SUCCESS_REQ, 1);
-        runner.assertTransferCount(InvokeHTTP.REL_RESPONSE, 1);
-    }
-
-    @Test
     public void testDelete() throws Exception {
         addHandler(new DeleteHandler());
 
@@ -1486,7 +1373,7 @@ public abstract class TestInvokeHttpCommon {
         }
     }
 
-    private enum MutativeMethod { POST, PUT, PATCH }
+    private enum MutativeMethod { POST, PUT }
 
 
     public static class MutativeMethodHandler extends AbstractHandler {
@@ -1784,17 +1671,17 @@ public abstract class TestInvokeHttpCommon {
 
         private DigestAuthenticator digestAuthenticator;
 
-        private DigestAuthHandler() throws Exception {
+        private DigestAuthHandler() {
             digestAuthenticator = new DigestAuthenticator();
             ConstraintSecurityHandler securityHandler = new ConstraintSecurityHandler();
 
-            final HashLoginService hashLoginService = new HashLoginService("realm", "src/test/resources/TestInvokeHttp/realm.properties");
-            hashLoginService.start();
-
+            HashLoginService hashLoginService = new HashLoginService("realm");
+            hashLoginService.putUser("basic_user", new Password("basic_password"), new String[]{"realm"});
             securityHandler.setLoginService(hashLoginService);
             securityHandler.setIdentityService(new DefaultIdentityService());
             digestAuthenticator.setConfiguration(securityHandler);
         }
+
 
         @Override
         public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse

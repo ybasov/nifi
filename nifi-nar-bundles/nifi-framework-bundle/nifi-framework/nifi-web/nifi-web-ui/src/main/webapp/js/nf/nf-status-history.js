@@ -15,32 +15,9 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-            'd3',
-            'nf.Common',
-            'nf.Dialog',
-            'nf.ErrorHandler'],
-            function ($, d3, nfCommon, nfDialog, nfErrorHandler) {
-            return (nf.StatusHistory = factory($, d3, nfCommon, nfDialog, nfErrorHandler));
-        });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.StatusHistory = factory(require('jquery'),
-            require('d3'),
-            require('nf.Common'),
-            require('nf.Dialog'),
-            require('nf.ErrorHandler')));
-    } else {
-        nf.StatusHistory = factory(root.$,
-            root.d3,
-            root.nf.Common,
-            root.nf.Dialog,
-            root.nf.ErrorHandler);
-    }
-}(this, function ($, d3, nfCommon, nfDialog, nfErrorHandler) {
+nf.StatusHistory = (function () {
     var config = {
         nifiInstanceId: 'nifi-instance-id',
         nifiInstanceLabel: 'NiFi',
@@ -65,19 +42,19 @@
      */
     var formatters = {
         'DURATION': function (d) {
-            return nfCommon.formatDuration(d);
+            return nf.Common.formatDuration(d);
         },
         'COUNT': function (d) {
             // need to handle floating point number since this formatter 
             // will also be used for average values
             if (d % 1 === 0) {
-                return nfCommon.formatInteger(d);
+                return nf.Common.formatInteger(d);
             } else {
-                return nfCommon.formatFloat(d);
+                return nf.Common.formatFloat(d);
             }
         },
         'DATA_SIZE': function (d) {
-            return nfCommon.formatDataSize(d);
+            return nf.Common.formatDataSize(d);
         }
     };
 
@@ -125,10 +102,10 @@
         // get the descriptors
         var descriptors = componentStatusHistory.fieldDescriptors;
         statusHistory.details = componentStatusHistory.componentDetails;
-        statusHistory.selectedDescriptor = nfCommon.isUndefined(selectedDescriptor) ? descriptors[0] : selectedDescriptor;
+        statusHistory.selectedDescriptor = nf.Common.isUndefined(selectedDescriptor) ? descriptors[0] : selectedDescriptor;
 
         // ensure enough status snapshots
-        if (nfCommon.isDefinedAndNotNull(componentStatusHistory.aggregateSnapshots) && componentStatusHistory.aggregateSnapshots.length > 1) {
+        if (nf.Common.isDefinedAndNotNull(componentStatusHistory.aggregateSnapshots) && componentStatusHistory.aggregateSnapshots.length > 1) {
             statusHistory.instances.push({
                 id: config.nifiInstanceId,
                 label: config.nifiInstanceLabel,
@@ -142,7 +119,7 @@
         // get the status for each node in the cluster if applicable
         $.each(componentStatusHistory.nodeSnapshots, function (_, nodeSnapshots) {
             // ensure enough status snapshots
-            if (nfCommon.isDefinedAndNotNull(nodeSnapshots.statusSnapshots) && nodeSnapshots.statusSnapshots.length > 1) {
+            if (nf.Common.isDefinedAndNotNull(nodeSnapshots.statusSnapshots) && nodeSnapshots.statusSnapshots.length > 1) {
                 statusHistory.instances.push({
                     id: nodeSnapshots.nodeId,
                     label: nodeSnapshots.address + ':' + nodeSnapshots.apiPort,
@@ -168,7 +145,7 @@
      */
     var insufficientHistory = function () {
         // notify the user
-        nfDialog.showOkDialog({
+        nf.Dialog.showOkDialog({
             headerText: 'Status History',
             dialogContent: 'Insufficient history, please try again later.'
         });
@@ -216,7 +193,7 @@
             options.push({
                 text: d.label,
                 value: d.field,
-                description: nfCommon.escapeHtml(d.description)
+                description: nf.Common.escapeHtml(d.description)
             });
         });
 
@@ -329,7 +306,7 @@
             // go through each instance of this status history
             $.each(statusHistory.instances, function (_, instance) {
                 // if this is the first time this instance is being rendered, make it visible
-                if (nfCommon.isUndefinedOrNull(instances[instance.id])) {
+                if (nf.Common.isUndefinedOrNull(instances[instance.id])) {
                     instances[instance.id] = true;
                 }
 
@@ -386,7 +363,7 @@
             var chartContainer = $('#status-history-chart-container').empty();
             if (chartContainer.hasClass('ui-resizable')) {
                 chartContainer.resizable('destroy');
-                chartContainer.removeAttr("style");
+                chartContainer.removeAttr( "style" );
             }
 
             // calculate the dimensions
@@ -463,8 +440,8 @@
                     return s.timestamp;
                 });
             });
-            addDetailItem(detailsContainer, 'Start', nfCommon.formatDateTime(minDate));
-            addDetailItem(detailsContainer, 'End', nfCommon.formatDateTime(maxDate));
+            addDetailItem(detailsContainer, 'Start', nf.Common.formatDateTime(minDate));
+            addDetailItem(detailsContainer, 'End', nf.Common.formatDateTime(maxDate));
 
             // determine the x axis range
             x.domain([minDate, maxDate]);
@@ -744,7 +721,7 @@
                 .on('brush', brushed);
 
             // conditionally set the brush extent
-            if (nfCommon.isDefinedAndNotNull(brushExtent)) {
+            if (nf.Common.isDefinedAndNotNull(brushExtent)) {
                 brush = brush.extent(brushExtent);
             }
 
@@ -836,7 +813,7 @@
             // adds a legend entry for the specified instance
             var addLegendEntry = function (legend, instance) {
                 // create the label and the checkbox
-                var instanceLabelElement = $('<div></div>').addClass('legend-label nf-checkbox-label').css('color', color(instance.label)).text(instance.label).ellipsis();
+                var instanceLabelElement = $('<div></div>').addClass('legend-label').css('color', color(instance.label)).text(instance.label).ellipsis();
                 var instanceCheckboxElement = $('<div class="nf-checkbox"></div>').on('click', function () {
                     // get the line and the control points for this instance (select all for the line to update control and main charts)
                     var chartLine = d3.selectAll('path.chart-line-' + instance.id);
@@ -924,29 +901,29 @@
                     // containment
                     // -----------
                     dialog = $('#status-history-dialog');
-                    var nfDialogData = {};
-                    if (nfCommon.isDefinedAndNotNull(dialog.data('nf-dialog'))) {
-                        nfDialogData = dialog.data('nf-dialog');
+                    var nfDialog = {};
+                    if (nf.Common.isDefinedAndNotNull(dialog.data('nf-dialog'))) {
+                        nfDialog = dialog.data('nf-dialog');
                     }
-                    nfDialogData['min-width'] = (dialog.width() / $(window).width()) * 100 + '%';
-                    nfDialogData['min-height'] = (dialog.height() / $(window).height()) * 100 + '%';
-                    nfDialogData.responsive['fullscreen-width'] = dialog.outerWidth() + 'px';
-                    nfDialogData.responsive['fullscreen-height'] = dialog.outerHeight() + 'px';
+                    nfDialog['min-width'] = (dialog.width() / $(window).width()) * 100 + '%';
+                    nfDialog['min-height'] = (dialog.height() / $(window).height()) * 100 + '%';
+                    nfDialog.responsive['fullscreen-width'] = dialog.outerWidth() + 'px';
+                    nfDialog.responsive['fullscreen-height'] = dialog.outerHeight() + 'px';
 
                     maxWidth = getChartMaxWidth();
                     if (ui.helper.width() > maxWidth) {
                         ui.helper.width(maxWidth);
 
-                        nfDialogData.responsive['fullscreen-width'] = $(window).width() + 'px';
-                        nfDialogData['min-width'] = '100%';
+                        nfDialog.responsive['fullscreen-width'] = $(window).width() + 'px';
+                        nfDialog['min-width'] = '100%';
                     }
 
                     maxHeight = getChartMaxHeight();
                     if (ui.helper.height() > maxHeight) {
                         ui.helper.height(maxHeight);
 
-                        nfDialogData.responsive['fullscreen-height'] = $(window).height() + 'px';
-                        nfDialogData['min-height'] = '100%';
+                        nfDialog.responsive['fullscreen-height'] = $(window).height() + 'px';
+                        nfDialog['min-height'] = '100%';
                     }
 
                     minHeight = getChartMinHeight();
@@ -954,11 +931,11 @@
                         ui.helper.height(minHeight);
                     }
 
-                    nfDialogData['min-width'] = (parseInt(nfDialogData['min-width'], 10) >= 100) ? '100%' : nfDialogData['min-width'];
-                    nfDialogData['min-height'] = (parseInt(nfDialogData['min-height'], 10) >= 100) ? '100%' : nfDialogData['min-height'];
+                    nfDialog['min-width'] = (parseInt(nfDialog['min-width'], 10) >= 100) ? '100%' : nfDialog['min-width'];
+                    nfDialog['min-height'] = (parseInt(nfDialog['min-height'], 10) >= 100) ? '100%' : nfDialog['min-height'];
 
                     //persist data attribute
-                    dialog.data('nfDialog', nfDialogData);
+                    dialog.data('nfDialog', nfDialog);
 
                     // ----------------------
                     // status history dialog
@@ -1042,12 +1019,12 @@
         $('<div class="setting-name"></div>').text(label).appendTo(detailContainer);
         var detailElement = $('<div class="setting-field"></div>').text(value).appendTo(detailContainer);
 
-        if (nfCommon.isDefinedAndNotNull(valueElementId)) {
+        if (nf.Common.isDefinedAndNotNull(valueElementId)) {
             detailElement.attr('id', valueElementId);
         }
     };
 
-    var nfStatusHistory = {
+    return {
         /**
          * Initializes the lineage graph.
          *
@@ -1060,13 +1037,13 @@
                 var statusHistory = $('#status-history-dialog').data('status-history');
                 if (statusHistory !== null) {
                     if (statusHistory.type === config.type.processor) {
-                        nfStatusHistory.showProcessorChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
+                        nf.StatusHistory.showProcessorChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
                     } else if (statusHistory.type === config.type.processGroup) {
-                        nfStatusHistory.showProcessGroupChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
+                        nf.StatusHistory.showProcessGroupChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
                     } else if (statusHistory.type === config.type.remoteProcessGroup) {
-                        nfStatusHistory.showRemoteProcessGroupChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
+                        nf.StatusHistory.showRemoteProcessGroupChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
                     } else {
-                        nfStatusHistory.showConnectionChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
+                        nf.StatusHistory.showConnectionChart(statusHistory.groupId, statusHistory.id, statusHistory.selectedDescriptor);
                     }
                 }
             });
@@ -1111,7 +1088,7 @@
                 if (e.target === window) {
                     updateChart();
                 }
-                nfCommon.toggleScrollable($('#status-history-details').get(0));
+                nf.Common.toggleScrollable($('#status-history-details').get(0));
             })
         },
 
@@ -1129,7 +1106,7 @@
                 dataType: 'json'
             }).done(function (response) {
                 handleStatusHistoryResponse(groupId, connectionId, response.statusHistory, config.type.connection, selectedDescriptor);
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         },
 
         /**
@@ -1146,7 +1123,7 @@
                 dataType: 'json'
             }).done(function (response) {
                 handleStatusHistoryResponse(groupId, processorId, response.statusHistory, config.type.processor, selectedDescriptor);
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         },
 
         /**
@@ -1163,7 +1140,7 @@
                 dataType: 'json'
             }).done(function (response) {
                 handleStatusHistoryResponse(groupId, processGroupId, response.statusHistory, config.type.processGroup, selectedDescriptor);
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         },
 
         /**
@@ -1180,9 +1157,7 @@
                 dataType: 'json'
             }).done(function (response) {
                 handleStatusHistoryResponse(groupId, remoteProcessGroupId, response.statusHistory, config.type.remoteProcessGroup, selectedDescriptor);
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         }
     };
-
-    return nfStatusHistory;
-}));
+}());

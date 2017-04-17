@@ -18,15 +18,16 @@ package org.apache.nifi.remote;
 
 import static java.util.Objects.requireNonNull;
 
+import com.sun.jersey.api.client.ClientHandlerException;
+import com.sun.jersey.api.client.ClientResponse;
+import com.sun.jersey.api.client.ClientResponse.Status;
+import com.sun.jersey.api.client.UniformInterfaceException;
 import java.io.File;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -41,15 +42,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
 import javax.net.ssl.SSLContext;
 import javax.ws.rs.core.Response;
-
 import org.apache.nifi.authorization.Resource;
 import org.apache.nifi.authorization.resource.Authorizable;
 import org.apache.nifi.authorization.resource.ResourceFactory;
 import org.apache.nifi.authorization.resource.ResourceType;
-import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.connectable.ConnectableType;
 import org.apache.nifi.connectable.Connection;
 import org.apache.nifi.connectable.Port;
@@ -78,11 +76,6 @@ import org.apache.nifi.web.api.dto.PortDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.sun.jersey.api.client.ClientHandlerException;
-import com.sun.jersey.api.client.ClientResponse;
-import com.sun.jersey.api.client.ClientResponse.Status;
-import com.sun.jersey.api.client.UniformInterfaceException;
-
 /**
  * Represents the Root Process Group of a remote NiFi Instance. Holds
  * information about that remote instance, as well as {@link IncomingPort}s and
@@ -98,16 +91,20 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
 
     private final String id;
 
-    private final String targetUris;
+    private final URI targetUri;
+    private final URI apiUri;
+    private final String host;
+    private final String protocol;
     private final ProcessScheduler scheduler;
     private final EventReporter eventReporter;
     private final NiFiProperties nifiProperties;
 
     private final AtomicReference<String> name = new AtomicReference<>();
-    private final AtomicReference<Position> position = new AtomicReference<>(new Position(0D, 0D));
+    private final AtomicReference<Position> position = new AtomicReference<>();
     private final AtomicReference<String> comments = new AtomicReference<>();
     private final AtomicReference<ProcessGroup> processGroup;
     private final AtomicBoolean transmitting = new AtomicBoolean(false);
+    private final FlowController flowController;
     private final SSLContext sslContext;
 
     private volatile String communicationsTimeout = "30 sec";
@@ -118,11 +115,6 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
     private volatile Integer proxyPort;
     private volatile String proxyUser;
     private volatile String proxyPassword;
-
-    private String networkInterfaceName;
-    private InetAddress localAddress;
-    private ValidationResult nicValidationResult;
-
 
     private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
     private final Lock readLock = rwLock.readLock();
@@ -144,17 +136,30 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
 
     private final ScheduledExecutorService backgroundThreadExecutor;
 
-    public StandardRemoteProcessGroup(final String id, final String targetUris, final ProcessGroup processGroup,
-                                      final FlowController flowController, final SSLContext sslContext, final NiFiProperties nifiProperties) {
+    public StandardRemoteProcessGroup(final String id, final String targetUri, final ProcessGroup processGroup,
+            final FlowController flowController, final SSLContext sslContext, final NiFiProperties nifiProperties) {
         this.nifiProperties = nifiProperties;
         this.id = requireNonNull(id);
+        this.flowController = requireNonNull(flowController);
+        final URI uri;
+        try {
+            uri = new URI(requireNonNull(targetUri.trim()));
 
-        this.targetUris = targetUris;
+            final String apiPath = SiteToSiteRestApiClient.resolveBaseUrl(uri);
+
+            apiUri = new URI(apiPath);
+        } catch (final URISyntaxException e) {
+            throw new IllegalArgumentException(e);
+        }
+
+        this.host = uri.getHost();
+        this.protocol = uri.getAuthority();
+        this.targetUri = uri;
         this.targetId = null;
         this.processGroup = new AtomicReference<>(processGroup);
         this.sslContext = sslContext;
         this.scheduler = flowController.getProcessScheduler();
-        this.authorizationIssue = "Establishing connection to " + targetUris;
+        this.authorizationIssue = "Establishing connection to " + targetUri;
 
         final BulletinRepository bulletinRepository = flowController.getBulletinRepository();
         eventReporter = new EventReporter() {
@@ -171,7 +176,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
         };
 
         final Runnable checkAuthorizations = new InitializationTask();
-        backgroundThreadExecutor = new FlowEngine(1, "Remote Process Group " + id + ": " + targetUris);
+        backgroundThreadExecutor = new FlowEngine(1, "Remote Process Group " + id + ": " + targetUri);
         backgroundThreadExecutor.scheduleWithFixedDelay(checkAuthorizations, 5L, 30L, TimeUnit.SECONDS);
     }
 
@@ -293,10 +298,14 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
         return targetId;
     }
 
+    public String getProtocol() {
+        return protocol;
+    }
+
     @Override
     public String getName() {
         final String name = this.name.get();
-        return name == null ? getTargetUri() : name;
+        return name == null ? targetUri.toString() : name;
     }
 
     @Override
@@ -352,13 +361,8 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
     }
 
     @Override
-    public String getTargetUri() {
-        return SiteToSiteRestApiClient.getFirstUrl(targetUris);
-    }
-
-    @Override
-    public String getTargetUris() {
-        return targetUris;
+    public URI getTargetUri() {
+        return targetUri;
     }
 
     @Override
@@ -366,9 +370,8 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
         return authorizationIssue;
     }
 
-    @Override
-    public Collection<ValidationResult> validate() {
-        return (nicValidationResult == null) ? Collections.emptyList() : Collections.singletonList(nicValidationResult);
+    public String getHost() {
+        return host;
     }
 
     public int getInputPortCount() {
@@ -623,7 +626,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
             }
 
             final StandardRemoteGroupPort port = new StandardRemoteGroupPort(descriptor.getId(), descriptor.getName(), getProcessGroup(),
-                this, TransferDirection.RECEIVE, ConnectableType.REMOTE_OUTPUT_PORT, sslContext, scheduler, nifiProperties);
+                    this, TransferDirection.RECEIVE, ConnectableType.REMOTE_OUTPUT_PORT, sslContext, scheduler, nifiProperties);
             outputPorts.put(descriptor.getId(), port);
 
             if (descriptor.getConcurrentlySchedulableTaskCount() != null) {
@@ -689,7 +692,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
             }
 
             final StandardRemoteGroupPort port = new StandardRemoteGroupPort(descriptor.getId(), descriptor.getName(), getProcessGroup(), this,
-                TransferDirection.SEND, ConnectableType.REMOTE_INPUT_PORT, sslContext, scheduler, nifiProperties);
+                    TransferDirection.SEND, ConnectableType.REMOTE_INPUT_PORT, sslContext, scheduler, nifiProperties);
 
             if (descriptor.getConcurrentlySchedulableTaskCount() != null) {
                 port.setMaxConcurrentTasks(descriptor.getConcurrentlySchedulableTaskCount());
@@ -736,7 +739,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
 
     @Override
     public String toString() {
-        return "RemoteProcessGroup[" + targetUris + "]";
+        return "RemoteProcessGroup[" + targetUri + "]";
     }
 
     @Override
@@ -758,6 +761,15 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
         }
     }
 
+    private ProcessGroup getRootGroup() {
+        return getRootGroup(getProcessGroup());
+    }
+
+    private ProcessGroup getRootGroup(final ProcessGroup context) {
+        final ProcessGroup parent = context.getParent();
+        return parent == null ? context : getRootGroup(parent);
+    }
+
     @Override
     public Date getLastRefreshTime() {
         readLock.lock();
@@ -774,7 +786,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
             // perform the request
             final ControllerDTO dto;
             try (final SiteToSiteRestApiClient apiClient = getSiteToSiteRestApiClient()) {
-                dto = apiClient.getController(targetUris);
+                dto = apiClient.getController();
             } catch (IOException e) {
                 writeLock.lock();
                 try {
@@ -795,7 +807,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
                     writeLock.unlock();
                 }
 
-                throw new CommunicationsException("Unable to communicate with Remote NiFi at URI " + targetUris + " due to: " + e.getMessage());
+                throw new CommunicationsException("Unable to communicate with Remote NiFi at URI " + getApiUri() + " due to: " + e.getMessage());
             }
 
             writeLock.lock();
@@ -864,79 +876,16 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
         }
     }
 
-    @Override
-    public String getNetworkInterface() {
-        readLock.lock();
-        try {
-            return networkInterfaceName;
-        } finally {
-            readLock.unlock();
-        }
-    }
-
-    @Override
-    public void setNetworkInterface(final String interfaceName) {
-        writeLock.lock();
-        try {
-            this.networkInterfaceName = interfaceName;
-            if (interfaceName == null) {
-                this.nicValidationResult = null;
-            } else {
-                try {
-                    final Enumeration<InetAddress> inetAddresses = NetworkInterface.getByName(interfaceName).getInetAddresses();
-
-                    if (inetAddresses.hasMoreElements()) {
-                        this.localAddress = inetAddresses.nextElement();
-                        this.nicValidationResult = null;
-                    } else {
-                        this.localAddress = null;
-                        this.nicValidationResult = new ValidationResult.Builder()
-                            .input(interfaceName)
-                            .subject("Network Interface Name")
-                            .valid(false)
-                            .explanation("No IP Address could be found that is bound to the interface with name " + interfaceName)
-                            .build();
-                    }
-                } catch (final Exception e) {
-                    this.localAddress = null;
-                    this.nicValidationResult = new ValidationResult.Builder()
-                        .input(interfaceName)
-                        .subject("Network Interface Name")
-                        .valid(false)
-                        .explanation("Could not obtain Network Interface with name " + interfaceName)
-                        .build();
-                }
-            }
-        } finally {
-            writeLock.unlock();
-        }
-    }
-
-    @Override
-    public InetAddress getLocalAddress() {
-        readLock.lock();
-        try {
-            if (nicValidationResult != null && !nicValidationResult.isValid()) {
-                return null;
-            }
-
-            return localAddress;
-        } finally {
-            readLock.unlock();
-        }
-    }
-
     private SiteToSiteRestApiClient getSiteToSiteRestApiClient() {
         SiteToSiteRestApiClient apiClient = new SiteToSiteRestApiClient(sslContext, new HttpProxy(proxyHost, proxyPort, proxyUser, proxyPassword), getEventReporter());
+        apiClient.setBaseUrl(getApiUri());
         apiClient.setConnectTimeoutMillis(getCommunicationsTimeout(TimeUnit.MILLISECONDS));
         apiClient.setReadTimeoutMillis(getCommunicationsTimeout(TimeUnit.MILLISECONDS));
-
-        final InetAddress localAddress = getLocalAddress();
-        if (localAddress != null) {
-            apiClient.setLocalAddress(localAddress);
-        }
-
         return apiClient;
+    }
+
+    protected String getApiUri() {
+        return apiUri.toString();
     }
 
     /**
@@ -960,6 +909,17 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
             }
         }
         return remotePorts;
+    }
+
+    private RemoteProcessGroupPortDescriptor convertPortToRemotePortDescriptor(final Port port) {
+        final StandardRemoteProcessGroupPortDescriptor descriptor = new StandardRemoteProcessGroupPortDescriptor();
+        descriptor.setComments(port.getComments());
+        descriptor.setExists(true);
+        descriptor.setGroupId(port.getProcessGroup().getIdentifier());
+        descriptor.setId(port.getIdentifier());
+        descriptor.setName(port.getName());
+        descriptor.setTargetRunning(port.isRunning());
+        return descriptor;
     }
 
     @Override
@@ -1132,6 +1092,10 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
         }
     }
 
+    private boolean isWebApiSecure() {
+        return targetUri.toString().toLowerCase().startsWith("https");
+    }
+
     @Override
     public boolean isSiteToSiteEnabled() {
         readLock.lock();
@@ -1153,7 +1117,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
         public void run() {
             try (final SiteToSiteRestApiClient apiClient = getSiteToSiteRestApiClient()) {
                 try {
-                    final ControllerDTO dto = apiClient.getController(targetUris);
+                    final ControllerDTO dto = apiClient.getController();
 
                     if (dto.getRemoteSiteListeningPort() == null && SiteToSiteTransportProtocol.RAW.equals(transportProtocol)) {
                         authorizationIssue = "Remote instance is not configured to allow RAW Site-to-Site communications at this time.";
@@ -1176,9 +1140,8 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
                     if (e.getResponseCode() == UNAUTHORIZED_STATUS_CODE) {
                         try {
                             // attempt to issue a registration request in case the target instance is a 0.x
-                            final boolean isApiSecure = apiClient.getBaseUrl().toLowerCase().startsWith("https");
-                            final RemoteNiFiUtils utils = new RemoteNiFiUtils(isApiSecure ? sslContext : null);
-                            final ClientResponse requestAccountResponse = utils.issueRegistrationRequest(apiClient.getBaseUrl());
+                            final RemoteNiFiUtils utils = new RemoteNiFiUtils(isWebApiSecure() ? sslContext : null);
+                            final ClientResponse requestAccountResponse = utils.issueRegistrationRequest(apiUri.toString());
                             if (Response.Status.Family.SUCCESSFUL.equals(requestAccountResponse.getStatusInfo().getFamily())) {
                                 logger.info("{} Issued a Request to communicate with remote instance", this);
                             } else {
@@ -1206,7 +1169,7 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
             } catch (final Exception e) {
                 logger.warn(String.format("Unable to connect to %s due to %s", StandardRemoteProcessGroup.this, e));
                 getEventReporter().reportEvent(Severity.WARNING, "Site to Site", String.format("Unable to connect to %s due to %s",
-                        StandardRemoteProcessGroup.this.getTargetUris(), e));
+                        StandardRemoteProcessGroup.this.getTargetUri().toString(), e));
             }
         }
     }
@@ -1281,8 +1244,6 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
                 if (port.hasIncomingConnection() && !port.getTargetExists()) {
                     throw new IllegalStateException(this.getIdentifier() + " has a Connection to Port " + port.getIdentifier() + ", but that Port no longer exists on the remote system");
                 }
-
-                port.verifyCanStart();
             }
 
             for (final StandardRemoteGroupPort port : outputPorts.values()) {
@@ -1293,8 +1254,6 @@ public class StandardRemoteProcessGroup implements RemoteProcessGroup {
                 if (!port.getConnections().isEmpty() && !port.getTargetExists()) {
                     throw new IllegalStateException(this.getIdentifier() + " has a Connection to Port " + port.getIdentifier() + ", but that Port no longer exists on the remote system");
                 }
-
-                port.verifyCanStart();
             }
         } finally {
             readLock.unlock();

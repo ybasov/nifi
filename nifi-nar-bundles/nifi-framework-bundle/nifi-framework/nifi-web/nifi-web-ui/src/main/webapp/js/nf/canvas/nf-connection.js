@@ -15,44 +15,9 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'd3',
-                'nf.Common',
-                'nf.Dialog',
-                'nf.ErrorHandler',
-                'nf.Client',
-                'nf.CanvasUtils'],
-            function ($, d3, nfCommon, nfDialog, nfErrorHandler, nfClient, nfCanvasUtils) {
-                return (nf.Connection = factory($, d3, nfCommon, nfDialog, nfErrorHandler, nfClient, nfCanvasUtils));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.Connection =
-            factory(require('jquery'),
-                require('d3'),
-                require('nf.Common'),
-                require('nf.Dialog'),
-                require('nf.ErrorHandler'),
-                require('nf.Client'),
-                require('nf.CanvasUtils')));
-    } else {
-        nf.Connection = factory(root.$,
-            root.d3,
-            root.nf.Common,
-            root.nf.Dialog,
-            root.nf.ErrorHandler,
-            root.nf.Client,
-            root.nf.CanvasUtils);
-    }
-}(this, function ($, d3, nfCommon, nfDialog, nfErrorHandler, nfClient, nfCanvasUtils) {
-    'use strict';
-
-    var nfSelectable;
-    var nfConnectionConfiguration;
-    var nfContextMenu;
+nf.Connection = (function () {
 
     // the dimensions for the connection label
     var dimensions = {
@@ -197,7 +162,7 @@
         for (var i = 0; i < line.length; i++) {
             if (i + 1 < line.length) {
                 var distance = distanceToSegment(p, line[i], line[i + 1]);
-                if (nfCommon.isUndefined(minimumDistance) || distance < minimumDistance) {
+                if (nf.Common.isUndefined(minimumDistance) || distance < minimumDistance) {
                     minimumDistance = distance;
                     index = i;
                 }
@@ -232,7 +197,7 @@
      * @param {object} terminal
      */
     var isGroup = function (terminal) {
-        return terminal.groupId !== nfCanvasUtils.getGroupId() && (isInputPortType(terminal.type) || isOutputPortType(terminal.type));
+        return terminal.groupId !== nf.Canvas.getGroupId() && (isInputPortType(terminal.type) || isOutputPortType(terminal.type));
     };
 
     /**
@@ -242,7 +207,7 @@
      * @return {boolean} Whether expiration is configured
      */
     var isExpirationConfigured = function (connection) {
-        if (nfCommon.isDefinedAndNotNull(connection.flowFileExpiration)) {
+        if (nf.Common.isDefinedAndNotNull(connection.flowFileExpiration)) {
             var match = connection.flowFileExpiration.match(/^(\d+).*/);
             if (match !== null && match.length > 0) {
                 if (parseInt(match[0], 10) > 0) {
@@ -309,12 +274,9 @@
             })
             .on('mousedown.selection', function () {
                 // select the connection when clicking the selectable path
-                nfSelectable.select(d3.select(this.parentNode));
-
-                // update URL deep linking params
-                nfCanvasUtils.setURLParameters();
+                nf.Selectable.select(d3.select(this.parentNode));
             })
-            .call(nfContextMenu.activate);
+            .call(nf.ContextMenu.activate);
     };
 
     // determines whether the specified connection contains an unsupported relationship
@@ -322,7 +284,7 @@
         var unavailable = false;
 
         // verify each selected relationship is still available
-        if (nfCommon.isDefinedAndNotNull(d.component.selectedRelationships) && nfCommon.isDefinedAndNotNull(d.component.availableRelationships)) {
+        if (nf.Common.isDefinedAndNotNull(d.component.selectedRelationships) && nf.Common.isDefinedAndNotNull(d.component.availableRelationships)) {
             $.each(d.component.selectedRelationships, function (_, selectedRelationship) {
                 if ($.inArray(selectedRelationship, d.component.availableRelationships) === -1) {
                     unavailable = true;
@@ -369,7 +331,7 @@
     // determines whether the connection is in warning based on the object count threshold
     var isWarningCount = function (d) {
         var percentUseCount = d.status.aggregateSnapshot.percentUseCount;
-        if (nfCommon.isDefinedAndNotNull(percentUseCount)) {
+        if (nf.Common.isDefinedAndNotNull(percentUseCount)) {
             return percentUseCount >= 61 && percentUseCount <= 85;
         }
 
@@ -379,7 +341,7 @@
     // determines whether the connection is in error based on the object count threshold
     var isErrorCount = function (d) {
         var percentUseCount = d.status.aggregateSnapshot.percentUseCount;
-        if (nfCommon.isDefinedAndNotNull(percentUseCount)) {
+        if (nf.Common.isDefinedAndNotNull(percentUseCount)) {
             return percentUseCount > 85;
         }
 
@@ -394,7 +356,7 @@
     // determines whether the connection is in warning based on the data size threshold
     var isWarningBytes = function (d) {
         var percentUseBytes = d.status.aggregateSnapshot.percentUseBytes;
-        if (nfCommon.isDefinedAndNotNull(percentUseBytes)) {
+        if (nf.Common.isDefinedAndNotNull(percentUseBytes)) {
             return percentUseBytes >= 61 && percentUseBytes <= 85;
         }
 
@@ -404,7 +366,7 @@
     // determines whether the connection is in error based on the data size threshold
     var isErrorBytes = function (d) {
         var percentUseBytes = d.status.aggregateSnapshot.percentUseBytes;
-        if (nfCommon.isDefinedAndNotNull(percentUseBytes)) {
+        if (nf.Common.isDefinedAndNotNull(percentUseBytes)) {
             return percentUseBytes > 85;
         }
 
@@ -422,10 +384,10 @@
         var transition = false;
 
         // extract the options if specified
-        if (nfCommon.isDefinedAndNotNull(options)) {
-            updatePath = nfCommon.isDefinedAndNotNull(options.updatePath) ? options.updatePath : updatePath;
-            updateLabel = nfCommon.isDefinedAndNotNull(options.updateLabel) ? options.updateLabel : updateLabel;
-            transition = nfCommon.isDefinedAndNotNull(options.transition) ? options.transition : transition;
+        if (nf.Common.isDefinedAndNotNull(options)) {
+            updatePath = nf.Common.isDefinedAndNotNull(options.updatePath) ? options.updatePath : updatePath;
+            updateLabel = nf.Common.isDefinedAndNotNull(options.updateLabel) ? options.updateLabel : updateLabel;
+            transition = nf.Common.isDefinedAndNotNull(options.transition) ? options.transition : transition;
         }
 
         if (updatePath === true) {
@@ -435,7 +397,7 @@
 
                     if (d.permissions.canRead) {
                         // if there are more than one selected relationship, mark this as grouped
-                        if (nfCommon.isDefinedAndNotNull(d.component.selectedRelationships) && d.component.selectedRelationships.length > 1) {
+                        if (nf.Common.isDefinedAndNotNull(d.component.selectedRelationships) && d.component.selectedRelationships.length > 1) {
                             grouped = true;
                         }
                     }
@@ -510,7 +472,7 @@
 
             if (updatePath === true) {
                 // calculate the start and end points
-                var sourceComponentId = nfCanvasUtils.getConnectionSourceComponentId(d);
+                var sourceComponentId = nf.CanvasUtils.getConnectionSourceComponentId(d);
                 var sourceData = d3.select('#id-' + sourceComponentId).datum();
                 var end;
 
@@ -525,9 +487,9 @@
                     };
                 }
 
-                // if we are currently dragging the endpoint to a new target, use that
+                // if we are currently dragging the endpoint to a new target, use that 
                 // position, otherwise we need to calculate it for the current target
-                if (nfCommon.isDefinedAndNotNull(d.end) && d.end.dragging === true) {
+                if (nf.Common.isDefinedAndNotNull(d.end) && d.end.dragging === true) {
                     // since we're dragging, use the same object thats bound to the endpoint drag event
                     end = d.end;
 
@@ -537,7 +499,7 @@
                         var newDestinationData = newDestination.datum();
 
                         // get the position on the new destination perimeter
-                        var newEnd = nfCanvasUtils.getPerimeterPoint(endAnchor, {
+                        var newEnd = nf.CanvasUtils.getPerimeterPoint(endAnchor, {
                             'x': newDestinationData.position.x,
                             'y': newDestinationData.position.y,
                             'width': newDestinationData.dimensions.width,
@@ -549,11 +511,11 @@
                         end.y = newEnd.y;
                     }
                 } else {
-                    var destinationComponentId = nfCanvasUtils.getConnectionDestinationComponentId(d);
+                    var destinationComponentId = nf.CanvasUtils.getConnectionDestinationComponentId(d);
                     var destinationData = d3.select('#id-' + destinationComponentId).datum();
 
                     // get the position on the destination perimeter
-                    end = nfCanvasUtils.getPerimeterPoint(endAnchor, {
+                    end = nf.CanvasUtils.getPerimeterPoint(endAnchor, {
                         'x': destinationData.position.x,
                         'y': destinationData.position.y,
                         'width': destinationData.dimensions.width,
@@ -570,7 +532,7 @@
                 }
 
                 // get the position on the source perimeter
-                var start = nfCanvasUtils.getPerimeterPoint(startAnchor, {
+                var start = nf.CanvasUtils.getPerimeterPoint(startAnchor, {
                     'x': sourceData.position.x,
                     'y': sourceData.position.y,
                     'width': sourceData.dimensions.width,
@@ -582,21 +544,21 @@
                 d.end = end;
 
                 // update the connection paths
-                nfCanvasUtils.transition(connection.select('path.connection-path'), transition)
+                nf.CanvasUtils.transition(connection.select('path.connection-path'), transition)
                     .attr({
                         'd': function () {
                             var datum = [d.start].concat(d.bends, [d.end]);
                             return lineGenerator(datum);
                         }
                     });
-                nfCanvasUtils.transition(connection.select('path.connection-selection-path'), transition)
+                nf.CanvasUtils.transition(connection.select('path.connection-selection-path'), transition)
                     .attr({
                         'd': function () {
                             var datum = [d.start].concat(d.bends, [d.end]);
                             return lineGenerator(datum);
                         }
                     });
-                nfCanvasUtils.transition(connection.select('path.connection-path-selectable'), transition)
+                nf.CanvasUtils.transition(connection.select('path.connection-path-selectable'), transition)
                     .attr({
                         'd': function () {
                             var datum = [d.start].concat(d.bends, [d.end]);
@@ -632,15 +594,12 @@
                         })
                         .on('mousedown.selection', function () {
                             // select the connection when clicking the label
-                            nfSelectable.select(d3.select(this.parentNode));
-
-                            // update URL deep linking params
-                            nfCanvasUtils.setURLParameters();
+                            nf.Selectable.select(d3.select(this.parentNode));
                         })
-                        .call(nfContextMenu.activate);
+                        .call(nf.ContextMenu.activate);
 
                     // update the start point
-                    nfCanvasUtils.transition(startpoints, transition)
+                    nf.CanvasUtils.transition(startpoints, transition)
                         .attr('transform', function (p) {
                             return 'translate(' + (p.x - 4) + ', ' + (p.y - 4) + ')';
                         });
@@ -665,15 +624,12 @@
                         })
                         .on('mousedown.selection', function () {
                             // select the connection when clicking the label
-                            nfSelectable.select(d3.select(this.parentNode));
-
-                            // update URL deep linking params
-                            nfCanvasUtils.setURLParameters();
+                            nf.Selectable.select(d3.select(this.parentNode));
                         })
-                        .call(nfContextMenu.activate);
+                        .call(nf.ContextMenu.activate);
 
                     // update the end point
-                    nfCanvasUtils.transition(endpoints, transition)
+                    nf.CanvasUtils.transition(endpoints, transition)
                         .attr('transform', function (p) {
                             return 'translate(' + (p.x - 4) + ', ' + (p.y - 4) + ')';
                         });
@@ -704,10 +660,10 @@
                             var connectionData = connection.datum();
 
                             // if this is a self loop prevent removing the last two bends
-                            var sourceComponentId = nfCanvasUtils.getConnectionSourceComponentId(connectionData);
-                            var destinationComponentId = nfCanvasUtils.getConnectionDestinationComponentId(connectionData);
+                            var sourceComponentId = nf.CanvasUtils.getConnectionSourceComponentId(connectionData);
+                            var destinationComponentId = nf.CanvasUtils.getConnectionDestinationComponentId(connectionData);
                             if (sourceComponentId === destinationComponentId && d.component.bends.length <= 2) {
-                                nfDialog.showOkDialog({
+                                nf.Dialog.showOkDialog({
                                     headerText: 'Connection',
                                     dialogContent: 'Looping connections must have at least two bend points.'
                                 });
@@ -748,15 +704,12 @@
                         })
                         .on('mousedown.selection', function () {
                             // select the connection when clicking the label
-                            nfSelectable.select(d3.select(this.parentNode));
-
-                            // update URL deep linking params
-                            nfCanvasUtils.setURLParameters();
+                            nf.Selectable.select(d3.select(this.parentNode));
                         })
-                        .call(nfContextMenu.activate);
+                        .call(nf.ContextMenu.activate);
 
                     // update the midpoints
-                    nfCanvasUtils.transition(midpoints, transition)
+                    nf.CanvasUtils.transition(midpoints, transition)
                         .attr('transform', function (p) {
                             return 'translate(' + (p.x - 4) + ', ' + (p.y - 4) + ')';
                         });
@@ -777,7 +730,7 @@
                 // update visible connections
                 if (connection.classed('visible')) {
 
-                    // if there is no connection label this connection is becoming
+                    // if there is no connection label this connection is becoming 
                     // visible so we need to render it
                     if (connectionLabelContainer.empty()) {
                         // connection label container
@@ -788,12 +741,9 @@
                             })
                             .on('mousedown.selection', function () {
                                 // select the connection when clicking the label
-                                nfSelectable.select(d3.select(this.parentNode));
-
-                                // update URL deep linking params
-                                nfCanvasUtils.setURLParameters();
+                                nf.Selectable.select(d3.select(this.parentNode));
                             })
-                            .call(nfContextMenu.activate);
+                            .call(nf.ContextMenu.activate);
 
                         // connection label
                         connectionLabelContainer.append('rect')
@@ -896,7 +846,7 @@
                                     connectionFromLabel.text(null).selectAll('title').remove();
 
                                     // apply ellipsis to the label as necessary
-                                    nfCanvasUtils.ellipsis(connectionFromLabel, d.component.source.name);
+                                    nf.CanvasUtils.ellipsis(connectionFromLabel, d.component.source.name);
                                 }).append('title').text(function () {
                                 return d.component.source.name;
                             });
@@ -1005,7 +955,7 @@
                                     connectionToLabel.text(null).selectAll('title').remove();
 
                                     // apply ellipsis to the label as necessary
-                                    nfCanvasUtils.ellipsis(connectionToLabel, d.component.destination.name);
+                                    nf.CanvasUtils.ellipsis(connectionToLabel, d.component.destination.name);
                                 }).append('title').text(function (d) {
                                 return d.component.destination.name;
                             });
@@ -1048,10 +998,10 @@
                         // -----------------------
 
                         // get the connection name
-                        var connectionNameValue = nfCanvasUtils.formatConnectionName(d.component);
+                        var connectionNameValue = nf.CanvasUtils.formatConnectionName(d.component);
 
                         // is there a name to render
-                        if (!nfCommon.isBlank(connectionNameValue)) {
+                        if (!nf.Common.isBlank(connectionNameValue)) {
                             // see if the connection name label is already rendered
                             if (connectionName.empty()) {
                                 connectionName = connectionLabelContainer.append('g')
@@ -1110,7 +1060,7 @@
                                     connectionToLabel.text(null).selectAll('title').remove();
 
                                     // apply ellipsis to the label as necessary
-                                    nfCanvasUtils.ellipsis(connectionToLabel, connectionNameValue);
+                                    nf.CanvasUtils.ellipsis(connectionToLabel, connectionNameValue);
                                 }).append('title').text(function () {
                                 return connectionNameValue;
                             });
@@ -1338,31 +1288,31 @@
                             }
                         })
                         .select('title').text(function () {
-                        if (d.permissions.canRead) {
-                            return 'Expires FlowFiles older than ' + d.component.flowFileExpiration;
-                        } else {
-                            return '';
-                        }
-                    });
+                            if (d.permissions.canRead) {
+                                return 'Expires FlowFiles older than ' + d.component.flowFileExpiration;
+                            } else {
+                                return '';
+                            }
+                        });
 
                     // update backpressure object fill
                     connectionLabelContainer.select('rect.backpressure-object')
                         .classed('not-configured', function () {
-                            return nfCommon.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseCount);
+                            return nf.Common.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseCount);
                         });
                     connectionLabelContainer.selectAll('rect.backpressure-tick.object')
                         .classed('not-configured', function () {
-                            return nfCommon.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseCount);
+                            return nf.Common.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseCount);
                         });
 
                     // update backpressure data size fill
                     connectionLabelContainer.select('rect.backpressure-data-size')
                         .classed('not-configured', function () {
-                            return nfCommon.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseBytes);
+                            return nf.Common.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseBytes);
                         });
                     connectionLabelContainer.selectAll('rect.backpressure-tick.data-size')
                         .classed('not-configured', function () {
-                            return nfCommon.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseBytes);
+                            return nf.Common.isUndefinedOrNull(d.status.aggregateSnapshot.percentUseBytes);
                         });
 
                     if (d.permissions.canWrite) {
@@ -1380,7 +1330,7 @@
             }
 
             // update the position of the label if possible
-            nfCanvasUtils.transition(connection.select('g.connection-label-container'), transition)
+            nf.CanvasUtils.transition(connection.select('g.connection-label-container'), transition)
                 .attr('transform', function () {
                     var label = d3.select(this).select('rect.body');
                     var position = getLabelPosition(label);
@@ -1404,7 +1354,7 @@
             // queued count value
             updated.select('text.queued tspan.count')
                 .text(function (d) {
-                    return nfCommon.substringBeforeFirst(d.status.aggregateSnapshot.queued, ' ');
+                    return nf.Common.substringBeforeFirst(d.status.aggregateSnapshot.queued, ' ');
                 });
 
             var backpressurePercentDataSize = updated.select('rect.backpressure-percent.data-size');
@@ -1412,26 +1362,26 @@
                 .duration(400)
                 .attr({
                     'width': function (d) {
-                        if (nfCommon.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseBytes)) {
+                        if (nf.Common.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseBytes)) {
                             return (backpressureBarWidth * d.status.aggregateSnapshot.percentUseBytes) / 100;
                         } else {
                             return 0;
                         }
                     }
                 }).each('end', function () {
-                backpressurePercentDataSize
-                    .classed('warning', function (d) {
-                        return isWarningBytes(d);
-                    })
-                    .classed('error', function (d) {
-                        return isErrorBytes(d);
-                    });
+                    backpressurePercentDataSize
+                        .classed('warning', function (d) {
+                            return isWarningBytes(d);
+                        })
+                        .classed('error', function (d) {
+                            return isErrorBytes(d);
+                        });
 
-                deferred.resolve();
-            });
+                    deferred.resolve();
+                });
 
             updated.select('rect.backpressure-data-size').select('title').text(function (d) {
-                if (nfCommon.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseBytes)) {
+                if (nf.Common.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseBytes)) {
                     return 'Queue is ' + d.status.aggregateSnapshot.percentUseBytes + '% full based on Back Pressure Data Size Threshold';
                 } else {
                     return 'Back Pressure Data Size Threshold is not configured';
@@ -1444,7 +1394,7 @@
             // queued size value
             updated.select('text.queued tspan.size')
                 .text(function (d) {
-                    return ' ' + nfCommon.substringAfterFirst(d.status.aggregateSnapshot.queued, ' ');
+                    return ' ' + nf.Common.substringAfterFirst(d.status.aggregateSnapshot.queued, ' ');
                 });
 
             var backpressurePercentObject = updated.select('rect.backpressure-percent.object');
@@ -1452,26 +1402,26 @@
                 .duration(400)
                 .attr({
                     'width': function (d) {
-                        if (nfCommon.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseCount)) {
+                        if (nf.Common.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseCount)) {
                             return (backpressureBarWidth * d.status.aggregateSnapshot.percentUseCount) / 100;
                         } else {
                             return 0;
                         }
                     }
                 }).each('end', function () {
-                backpressurePercentObject
-                    .classed('warning', function (d) {
-                        return isWarningCount(d);
-                    })
-                    .classed('error', function (d) {
-                        return isErrorCount(d);
-                    });
+                    backpressurePercentObject
+                        .classed('warning', function (d) {
+                            return isWarningCount(d);
+                        })
+                        .classed('error', function (d) {
+                            return isErrorCount(d);
+                        });
 
-                deferred.resolve();
-            });
+                    deferred.resolve();
+                });
 
             updated.select('rect.backpressure-object').select('title').text(function (d) {
-                if (nfCommon.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseCount)) {
+                if (nf.Common.isDefinedAndNotNull(d.status.aggregateSnapshot.percentUseCount)) {
                     return 'Queue is ' + d.status.aggregateSnapshot.percentUseCount + '% full based on Back Pressure Object Threshold';
                 } else {
                     return 'Back Pressure Object Threshold is not configured';
@@ -1513,7 +1463,7 @@
      */
     var save = function (d, connection) {
         var entity = {
-            'revision': nfClient.getRevision(d),
+            'revision': nf.Client.getRevision(d),
             'component': connection
         };
 
@@ -1525,15 +1475,15 @@
             contentType: 'application/json'
         }).done(function (response) {
             // request was successful, update the entry
-            nfConnection.set(response);
+            nf.Connection.set(response);
         }).fail(function (xhr, status, error) {
             if (xhr.status === 400 || xhr.status === 404 || xhr.status === 409) {
-                nfDialog.showOkDialog({
+                nf.Dialog.showOkDialog({
                     headerText: 'Connection',
-                    dialogContent: nfCommon.escapeHtml(xhr.responseText)
+                    dialogContent: nf.Common.escapeHtml(xhr.responseText)
                 });
             } else {
-                nfErrorHandler.handleAjaxError(xhr, status, error);
+                nf.Common.handleAjaxError(xhr, status, error);
             }
         });
     };
@@ -1542,30 +1492,20 @@
     var removeConnections = function (removed) {
         // consider reloading source/destination of connection being removed
         removed.each(function (d) {
-            nfCanvasUtils.reloadConnectionSourceAndDestination(d.sourceId, d.destinationId);
+            nf.CanvasUtils.reloadConnectionSourceAndDestination(d.sourceId, d.destinationId);
         });
 
         // remove the connection
         removed.remove();
     };
 
-    var nfConnection = {
+    return {
         config: {
             selfLoopXOffset: (dimensions.width / 2) + 5,
             selfLoopYOffset: 25
         },
 
-        /**
-         * Initializes the connection.
-         *
-         * @param nfSelectableRef   The nfSelectable module.
-         * @param nfContextMenuRef   The nfContextMenu module.
-         */
-        init: function (nfSelectableRef, nfContextMenuRef, nfConnectionConfigurationRef) {
-            nfSelectable = nfSelectableRef;
-            nfContextMenu = nfContextMenuRef;
-            nfConnectionConfiguration = nfConnectionConfigurationRef;
-
+        init: function () {
             connectionMap = d3.map();
             removedCache = d3.map();
             addedCache = d3.map();
@@ -1660,7 +1600,7 @@
 
                     // ensure the new destination is valid
                     d3.select('g.hover').classed('connectable-destination', function () {
-                        return nfCanvasUtils.isValidConnectionDestination(d3.select(this));
+                        return nf.CanvasUtils.isValidConnectionDestination(d3.select(this));
                     });
 
                     // redraw this connection
@@ -1689,11 +1629,11 @@
                         });
                     } else {
                         // prompt for the new port if appropriate
-                        if (nfCanvasUtils.isProcessGroup(destination) || nfCanvasUtils.isRemoteProcessGroup(destination)) {
+                        if (nf.CanvasUtils.isProcessGroup(destination) || nf.CanvasUtils.isRemoteProcessGroup(destination)) {
                             // user will select new port and updated connect details will be set accordingly
-                            nfConnectionConfiguration.showConfiguration(connection, destination).done(function () {
+                            nf.ConnectionConfiguration.showConfiguration(connection, destination).done(function () {
                                 // reload the previous destination
-                                nfCanvasUtils.reloadConnectionSourceAndDestination(null, previousDestinationId);
+                                nf.CanvasUtils.reloadConnectionSourceAndDestination(null, previousDestinationId);
                             }).fail(function () {
                                 // reset the connection
                                 connection.call(updateConnections, {
@@ -1704,15 +1644,15 @@
                         } else {
                             // get the destination details
                             var destinationData = destination.datum();
-                            var destinationType = nfCanvasUtils.getConnectableTypeForDestination(destination);
+                            var destinationType = nf.CanvasUtils.getConnectableTypeForDestination(destination);
 
                             var connectionEntity = {
-                                'revision': nfClient.getRevision(connectionData),
+                                'revision': nf.Client.getRevision(connectionData),
                                 'component': {
                                     'id': connectionData.id,
                                     'destination': {
                                         'id': destinationData.id,
-                                        'groupId': nfCanvasUtils.getGroupId(),
+                                        'groupId': nf.Canvas.getGroupId(),
                                         'type': destinationType
                                     }
                                 }
@@ -1724,8 +1664,8 @@
                                     x: destinationData.position.x + (destinationData.dimensions.width),
                                     y: destinationData.position.y + (destinationData.dimensions.height / 2)
                                 };
-                                var xOffset = nfConnection.config.selfLoopXOffset;
-                                var yOffset = nfConnection.config.selfLoopYOffset;
+                                var xOffset = nf.Connection.config.selfLoopXOffset;
+                                var yOffset = nf.Connection.config.selfLoopYOffset;
 
                                 connectionEntity.component.bends = [];
                                 connectionEntity.component.bends.push({
@@ -1748,16 +1688,16 @@
                                 var updatedConnectionData = response.component;
 
                                 // refresh to update the label
-                                nfConnection.set(response);
+                                nf.Connection.set(response);
 
                                 // reload the previous destination and the new source/destination
-                                nfCanvasUtils.reloadConnectionSourceAndDestination(null, previousDestinationId);
-                                nfCanvasUtils.reloadConnectionSourceAndDestination(response.sourceId, response.destinationId);
+                                nf.CanvasUtils.reloadConnectionSourceAndDestination(null, previousDestinationId);
+                                nf.CanvasUtils.reloadConnectionSourceAndDestination(response.sourceId, response.destinationId);
                             }).fail(function (xhr, status, error) {
                                 if (xhr.status === 400 || xhr.status === 401 || xhr.status === 403 || xhr.status === 404 || xhr.status === 409) {
-                                    nfDialog.showOkDialog({
+                                    nf.Dialog.showOkDialog({
                                         headerText: 'Connection',
-                                        dialogContent: nfCommon.escapeHtml(xhr.responseText)
+                                        dialogContent: nf.Common.escapeHtml(xhr.responseText)
                                     });
 
                                     // reset the connection
@@ -1766,7 +1706,7 @@
                                         'updateLabel': false
                                     });
                                 } else {
-                                    nfErrorHandler.handleAjaxError(xhr, status, error);
+                                    nf.Common.handleAjaxError(xhr, status, error);
                                 }
                             });
                         }
@@ -1803,10 +1743,10 @@
                                 .attr('width', width)
                                 .attr('height', height)
                                 .attr('stroke-width', function () {
-                                    return 1 / nfCanvasUtils.scaleCanvasView();
+                                    return 1 / nf.Canvas.View.scale();
                                 })
                                 .attr('stroke-dasharray', function () {
-                                    return 4 / nfCanvasUtils.scaleCanvasView();
+                                    return 4 / nf.Canvas.View.scale();
                                 })
                                 .datum({
                                     x: position.x,
@@ -1907,8 +1847,8 @@
          */
         add: function (connectionEntities, options) {
             var selectAll = false;
-            if (nfCommon.isDefinedAndNotNull(options)) {
-                selectAll = nfCommon.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
+            if (nf.Common.isDefinedAndNotNull(options)) {
+                selectAll = nf.Common.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
             }
 
             // get the current time
@@ -1928,7 +1868,7 @@
                 $.each(connectionEntities, function (_, connectionEntity) {
                     add(connectionEntity);
                 });
-            } else if (nfCommon.isDefinedAndNotNull(connectionEntities)) {
+            } else if (nf.Common.isDefinedAndNotNull(connectionEntities)) {
                 add(connectionEntities);
             }
 
@@ -1942,56 +1882,6 @@
         },
 
         /**
-         * Determines if the specified selection is disconnected from other nodes.
-         *
-         * @argument {selection} selection          The selection
-         */
-        isDisconnected: function (selection) {
-
-            // if nothing is selected return
-            if (selection.empty()) {
-                return false;
-            }
-            var connections = d3.map();
-            var components = d3.map();
-            var isDisconnected = true;
-
-            // include connections
-            selection.filter(function (d) {
-                return d.type === 'Connection';
-            }).each(function (d) {
-                connections.set(d.id, d);
-            });
-
-            // include components and ensure their connections are included
-            selection.filter(function (d) {
-                return d.type !== 'Connection';
-            }).each(function (d) {
-                components.set(d.id, d.component);
-
-                // check all connections of this component
-                $.each(nfConnection.getComponentConnections(d.id), function (_, connection) {
-                    if (!connections.has(connection.id)) {
-                        isDisconnected = false;
-                        return false;
-                    }
-                });
-            });
-            if (isDisconnected) {
-
-                // go through each connection to ensure its source and destination are included
-                connections.forEach(function (id, connection) {
-                    if (isDisconnected) {
-
-                        // determine whether this connection and its components are included within the selection
-                        isDisconnected = components.has(nfCanvasUtils.getConnectionSourceComponentId(connection)) && components.has(nfCanvasUtils.getConnectionDestinationComponentId(connection));
-                    }
-                });
-            }
-            return isDisconnected;
-        },
-
-        /**
          * Populates the graph with the specified connections.
          *
          * @argument {object | array} connectionEntities               The connections to add
@@ -2000,16 +1890,16 @@
         set: function (connectionEntities, options) {
             var selectAll = false;
             var transition = false;
-            if (nfCommon.isDefinedAndNotNull(options)) {
-                selectAll = nfCommon.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
-                transition = nfCommon.isDefinedAndNotNull(options.transition) ? options.transition : transition;
+            if (nf.Common.isDefinedAndNotNull(options)) {
+                selectAll = nf.Common.isDefinedAndNotNull(options.selectAll) ? options.selectAll : selectAll;
+                transition = nf.Common.isDefinedAndNotNull(options.transition) ? options.transition : transition;
             }
 
             var set = function (proposedConnectionEntity) {
                 var currentConnectionEntity = connectionMap.get(proposedConnectionEntity.id);
 
                 // set the connection if appropriate due to revision and wasn't previously removed
-                if (nfClient.isNewerRevision(currentConnectionEntity, proposedConnectionEntity) && !removedCache.has(proposedConnectionEntity.id)) {
+                if (nf.Client.isNewerRevision(currentConnectionEntity, proposedConnectionEntity) && !removedCache.has(proposedConnectionEntity.id)) {
                     connectionMap.set(proposedConnectionEntity.id, $.extend({
                         type: 'Connection'
                     }, proposedConnectionEntity));
@@ -2032,7 +1922,7 @@
                 $.each(connectionEntities, function (_, connectionEntity) {
                     set(connectionEntity);
                 });
-            } else if (nfCommon.isDefinedAndNotNull(connectionEntities)) {
+            } else if (nf.Common.isDefinedAndNotNull(connectionEntities)) {
                 set(connectionEntities);
             }
 
@@ -2053,7 +1943,7 @@
          * @param {string} connectionId
          */
         refresh: function (connectionId) {
-            if (nfCommon.isDefinedAndNotNull(connectionId)) {
+            if (nf.Common.isDefinedAndNotNull(connectionId)) {
                 d3.select('#id-' + connectionId).call(updateConnections, {
                     'updatePath': true,
                     'updateLabel': true
@@ -2102,7 +1992,7 @@
          * Removes all processors.
          */
         removeAll: function () {
-            nfConnection.remove(connectionMap.keys());
+            nf.Connection.remove(connectionMap.keys());
         },
 
         /**
@@ -2118,7 +2008,7 @@
                     url: connectionEntity.uri,
                     dataType: 'json'
                 }).done(function (response) {
-                    nfConnection.set(response);
+                    nf.Connection.set(response);
                 });
             }
         },
@@ -2156,7 +2046,7 @@
             var connections = [];
             connectionMap.forEach(function (_, entry) {
                 // see if this component is the source or destination of this connection
-                if (nfCanvasUtils.getConnectionSourceComponentId(entry) === id || nfCanvasUtils.getConnectionDestinationComponentId(entry) === id) {
+                if (nf.CanvasUtils.getConnectionSourceComponentId(entry) === id || nf.CanvasUtils.getConnectionDestinationComponentId(entry) === id) {
                     connections.push(entry);
                 }
             });
@@ -2170,7 +2060,7 @@
          * @param {string} id
          */
         get: function (id) {
-            if (nfCommon.isUndefined(id)) {
+            if (nf.Common.isUndefined(id)) {
                 return connectionMap.values();
             } else {
                 return connectionMap.get(id);
@@ -2195,6 +2085,4 @@
             expire(removedCache);
         }
     };
-
-    return nfConnection;
-}));
+}());

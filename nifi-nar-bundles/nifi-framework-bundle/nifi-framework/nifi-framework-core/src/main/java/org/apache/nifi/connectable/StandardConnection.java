@@ -110,7 +110,7 @@ public final class StandardConnection implements Connection {
 
     @Override
     public Authorizable getParentAuthorizable() {
-        return getProcessGroup();
+        return null;
     }
 
     @Override
@@ -135,11 +135,6 @@ public final class StandardConnection implements Connection {
                 }
 
                 return name;
-            }
-
-            @Override
-            public String getSafeDescription() {
-                return "Connection " + StandardConnection.this.getIdentifier();
             }
         };
     }
@@ -177,7 +172,7 @@ public final class StandardConnection implements Connection {
     @Override
     public AuthorizationResult checkAuthorization(Authorizer authorizer, RequestAction action, NiFiUser user, Map<String, String> resourceContext) {
         if (user == null) {
-            return AuthorizationResult.denied("Unknown user.");
+            return AuthorizationResult.denied("Unknown user");
         }
 
         // check the source
@@ -193,7 +188,7 @@ public final class StandardConnection implements Connection {
     @Override
     public void authorize(Authorizer authorizer, RequestAction action, NiFiUser user, Map<String, String> resourceContext) throws AccessDeniedException {
         if (user == null) {
-            throw new AccessDeniedException("Unknown user.");
+            throw new AccessDeniedException("Unknown user");
         }
 
         getSourceAuthorizable().authorize(authorizer, action, user, resourceContext);

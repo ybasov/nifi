@@ -174,16 +174,17 @@ public class QueryElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
             .allowableValues(TARGET_FLOW_FILE_CONTENT, TARGET_FLOW_FILE_ATTRIBUTES)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR).build();
 
-    private static final Set<Relationship> relationships;
-    private static final List<PropertyDescriptor> propertyDescriptors;
+    @Override
+    public Set<Relationship> getRelationships() {
+        final Set<Relationship> relationships = new HashSet<>();
+        relationships.add(REL_SUCCESS);
+        relationships.add(REL_FAILURE);
+        relationships.add(REL_RETRY);
+        return Collections.unmodifiableSet(relationships);
+    }
 
-    static {
-        final Set<Relationship> _rels = new HashSet<>();
-        _rels.add(REL_SUCCESS);
-        _rels.add(REL_FAILURE);
-        _rels.add(REL_RETRY);
-        relationships = Collections.unmodifiableSet(_rels);
-
+    @Override
+    public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
         final List<PropertyDescriptor> descriptors = new ArrayList<>();
         descriptors.add(ES_URL);
         descriptors.add(PROP_SSL_CONTEXT_SERVICE);
@@ -200,17 +201,7 @@ public class QueryElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
         descriptors.add(LIMIT);
         descriptors.add(TARGET);
 
-        propertyDescriptors = Collections.unmodifiableList(descriptors);
-    }
-
-    @Override
-    public Set<Relationship> getRelationships() {
-        return relationships;
-    }
-
-    @Override
-    public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
-        return propertyDescriptors;
+        return Collections.unmodifiableList(descriptors);
     }
 
     @OnScheduled
@@ -256,8 +247,8 @@ public class QueryElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
                 .equals(TARGET_FLOW_FILE_CONTENT);
 
         // Authentication
-        final String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
-        final String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
+        final String username = context.getProperty(USERNAME).getValue();
+        final String password = context.getProperty(PASSWORD).getValue();
 
         final ComponentLog logger = getLogger();
 
@@ -270,7 +261,7 @@ public class QueryElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
 
             final long startNanos = System.nanoTime();
             // read the url property from the context
-            final String urlstr = StringUtils.trimToEmpty(context.getProperty(ES_URL).evaluateAttributeExpressions().getValue());
+            final String urlstr = StringUtils.trimToEmpty(context.getProperty(ES_URL).getValue());
 
             boolean hitLimit = false;
             do {
@@ -288,7 +279,6 @@ public class QueryElasticsearchHttp extends AbstractElasticsearchHttpProcessor {
                 numResults = this.getPage(getResponse, queryUrl, context, session, flowFile,
                         logger, startNanos, targetIsContent);
                 fromIndex += pageSize;
-                getResponse.close();
             } while (numResults > 0 && !hitLimit);
 
             if (flowFile != null) {

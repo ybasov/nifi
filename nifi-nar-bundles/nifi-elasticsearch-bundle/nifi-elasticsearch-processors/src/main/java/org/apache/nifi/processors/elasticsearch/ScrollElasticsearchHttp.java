@@ -159,15 +159,16 @@ public class ScrollElasticsearchHttp extends AbstractElasticsearchHttpProcessor 
             .required(true).expressionLanguageSupported(true)
             .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR).build();
 
-    private static final Set<Relationship> relationships;
-    private static final List<PropertyDescriptor> propertyDescriptors;
+    @Override
+    public Set<Relationship> getRelationships() {
+        final Set<Relationship> relationships = new HashSet<>();
+        relationships.add(REL_SUCCESS);
+        relationships.add(REL_FAILURE);
+        return Collections.unmodifiableSet(relationships);
+    }
 
-    static {
-        final Set<Relationship> _rels = new HashSet<>();
-        _rels.add(REL_SUCCESS);
-        _rels.add(REL_FAILURE);
-        relationships = Collections.unmodifiableSet(_rels);
-
+    @Override
+    public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
         final List<PropertyDescriptor> descriptors = new ArrayList<>();
         descriptors.add(ES_URL);
         descriptors.add(PROP_SSL_CONTEXT_SERVICE);
@@ -183,17 +184,7 @@ public class ScrollElasticsearchHttp extends AbstractElasticsearchHttpProcessor 
         descriptors.add(FIELDS);
         descriptors.add(SORT);
 
-        propertyDescriptors = Collections.unmodifiableList(descriptors);
-    }
-
-    @Override
-    public Set<Relationship> getRelationships() {
-        return relationships;
-    }
-
-    @Override
-    public final List<PropertyDescriptor> getSupportedPropertyDescriptors() {
-        return propertyDescriptors;
+        return Collections.unmodifiableList(descriptors);
     }
 
     @OnScheduled
@@ -236,18 +227,18 @@ public class ScrollElasticsearchHttp extends AbstractElasticsearchHttpProcessor 
                 .getProperty(SCROLL_DURATION).evaluateAttributeExpressions(flowFile).getValue() : null;
 
         // Authentication
-        final String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
-        final String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
+        final String username = context.getProperty(USERNAME).getValue();
+        final String password = context.getProperty(PASSWORD).getValue();
 
         final ComponentLog logger = getLogger();
 
         try {
             String scrollId = loadScrollId(context.getStateManager());
 
-            // read the url property from the context
-            final String urlstr = StringUtils.trimToEmpty(context.getProperty(ES_URL).evaluateAttributeExpressions()
-                    .getValue());
             if (scrollId != null) {
+                // read the url property from the context
+                final String urlstr = StringUtils.trimToEmpty(context.getProperty(ES_URL)
+                        .getValue());
                 final URL scrollurl = buildRequestURL(urlstr, query, index, docType, fields, sort,
                         scrollId, pageSize, scroll);
                 final long startNanos = System.nanoTime();
@@ -255,12 +246,13 @@ public class ScrollElasticsearchHttp extends AbstractElasticsearchHttpProcessor 
                 final Response getResponse = sendRequestToElasticsearch(okHttpClient, scrollurl,
                         username, password, "GET", null);
                 this.getPage(getResponse, scrollurl, context, session, flowFile, logger, startNanos);
-                getResponse.close();
             } else {
                 logger.debug("Querying {}/{} from Elasticsearch: {}", new Object[] { index,
                         docType, query });
 
                 // read the url property from the context
+                final String urlstr = StringUtils.trimToEmpty(context.getProperty(ES_URL)
+                        .getValue());
                 final URL queryUrl = buildRequestURL(urlstr, query, index, docType, fields, sort,
                         scrollId, pageSize, scroll);
                 final long startNanos = System.nanoTime();
@@ -268,7 +260,6 @@ public class ScrollElasticsearchHttp extends AbstractElasticsearchHttpProcessor 
                 final Response getResponse = sendRequestToElasticsearch(okHttpClient, queryUrl,
                         username, password, "GET", null);
                 this.getPage(getResponse, queryUrl, context, session, flowFile, logger, startNanos);
-                getResponse.close();
             }
 
         } catch (IOException ioe) {

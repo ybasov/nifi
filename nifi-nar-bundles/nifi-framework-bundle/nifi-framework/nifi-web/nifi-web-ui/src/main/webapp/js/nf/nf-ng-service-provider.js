@@ -15,48 +15,37 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define([], function () {
-            return (nf.ng.ServiceProvider = factory());
-        });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.ng.ServiceProvider = factory());
-    } else {
-        nf.ng.ServiceProvider = factory();
-    }
-}(this, function () {
+nf.ng.ServiceProvider = function () {
     'use strict';
 
-    return function () {
-        function ServiceProvider() {
-        }
+    function ServiceProvider() {
 
-        ServiceProvider.prototype = {
-            constructor: ServiceProvider,
-
-            /**
-             * Registers the given `object` by `name`.
-             *
-             * @param {string} name     The lookup name of the object being registered
-             * @param {object} object   The object to register
-             */
-            register: function (name, object) {
-                this[name] = object;
-            },
-
-            /**
-             * Removes the given object from the registry.
-             *
-             * @param {string} objectName    The lookup name of the object to remove from the registry
-             */
-            remove: function (objectName) {
-                delete this[objectName];
-            }
-        }
-
-        return new ServiceProvider();
     }
-}));
+    ServiceProvider.prototype = {
+        constructor: ServiceProvider,
+
+        /**
+         * Registers the given `object` by `name`.
+         *
+         * @param {string} name     The lookup name of the object being registered
+         * @param {object} object   The object to register
+         */
+        register: function(name, object) {
+            serviceProvider[name] = object;
+        },
+
+        /**
+         * Removes the given object from the registry.
+         *
+         * @param {string objectName    The lookup name of the object to remove from the registry
+             */
+        remove: function(objectName) {
+            delete serviceProvider[objectName];
+        }
+    }
+
+    var serviceProvider = new ServiceProvider();
+    return serviceProvider;
+};

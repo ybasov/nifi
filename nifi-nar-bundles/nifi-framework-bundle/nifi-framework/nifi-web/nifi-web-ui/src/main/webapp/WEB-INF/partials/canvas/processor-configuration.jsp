@@ -27,7 +27,7 @@
                             <input type="text" id="processor-name" name="processor-name"/>
                             <div class="processor-enabled-container">
                                 <div id="processor-enabled" class="nf-checkbox checkbox-unchecked"></div>
-                                <span class="nf-checkbox-label"> Enabled</span>
+                                <span> Enabled</span>
                             </div>
                         </div>
                     </div>
@@ -42,10 +42,6 @@
                         <div class="setting-field">
                             <span id="processor-type"></span>
                         </div>
-                    </div>
-                    <div class="setting">
-                        <div class="setting-name">Bundle</div>
-                        <div id="processor-bundle" class="setting-field"></div>
                     </div>
                     <div class="setting">
                         <div class="penalty-duration-setting">

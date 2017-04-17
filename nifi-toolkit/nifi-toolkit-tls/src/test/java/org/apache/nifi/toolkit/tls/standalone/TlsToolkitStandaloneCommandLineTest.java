@@ -34,8 +34,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.List;
@@ -50,7 +48,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
-import static org.junit.Assume.assumeFalse;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -115,13 +112,6 @@ public class TlsToolkitStandaloneCommandLineTest {
         String testSigningAlgorithm = "testSigningAlgorithm";
         tlsToolkitStandaloneCommandLine.parse("-s", testSigningAlgorithm);
         assertEquals(testSigningAlgorithm, tlsToolkitStandaloneCommandLine.createConfig().getSigningAlgorithm());
-    }
-
-    @Test
-    public void testSAN() throws CommandLineParseException, IOException {
-        String dnsSAN = "nifi.apache.org";
-        tlsToolkitStandaloneCommandLine.parse("--subjectAlternativeNames", dnsSAN);
-        assertEquals(dnsSAN, tlsToolkitStandaloneCommandLine.createConfig().getDomainAlternativeNames());
     }
 
     @Test
@@ -422,25 +412,6 @@ public class TlsToolkitStandaloneCommandLineTest {
     @Test(expected = IllegalArgumentException.class)
     public void testBadGlobalOrder() throws CommandLineParseException {
         tlsToolkitStandaloneCommandLine.parse("-n", "notInGlobalOrder", "-G", "nifi[1-3]");
-    }
-
-    private boolean isWindowsEnvironment() {
-        return System.getProperty("os.name").toLowerCase().startsWith("windows");
-    }
-
-    @Test
-    public void testDefaultOutputPathRoot() {
-        assumeFalse(isWindowsEnvironment());
-        Path root = Paths.get(".").toAbsolutePath().getRoot().resolve(".");
-        String calculateDefaultOutputDirectory = TlsToolkitStandaloneCommandLine.calculateDefaultOutputDirectory(root);
-        assertEquals(root.toAbsolutePath().getRoot().toString(), calculateDefaultOutputDirectory);
-    }
-
-    @Test
-    public void testDefaultOutputPath() {
-        Path path = Paths.get(".");
-        String calculateDefaultOutputDirectory = TlsToolkitStandaloneCommandLine.calculateDefaultOutputDirectory(path);
-        assertEquals("../" + path.toAbsolutePath().normalize().getFileName().toString(), calculateDefaultOutputDirectory);
     }
 
     private Properties getProperties() throws IOException {

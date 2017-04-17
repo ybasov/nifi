@@ -18,19 +18,19 @@ package org.apache.nifi.controller;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.attribute.expression.language.StandardPropertyValue;
-import org.apache.nifi.bundle.Bundle;
-import org.apache.nifi.bundle.BundleCoordinate;
 import org.apache.nifi.components.ConfigurableComponent;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.controller.service.ControllerServiceNode;
 import org.apache.nifi.controller.service.ControllerServiceProvider;
-import org.apache.nifi.nar.ExtensionManager;
+import org.apache.nifi.logging.ComponentLog;
+import org.apache.nifi.nar.InstanceClassLoader;
 import org.apache.nifi.nar.NarCloseable;
 import org.apache.nifi.registry.VariableRegistry;
 import org.apache.nifi.util.file.classloader.ClassLoaderUtils;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,7 +43,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -51,6 +50,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public abstract class AbstractConfiguredComponent implements ConfigurableComponent, ConfiguredComponent {
 
     private final String id;
+    private final ConfigurableComponent component;
     private final ValidationContextFactory validationContextFactory;
     private final ControllerServiceProvider serviceProvider;
     private final AtomicReference<String> name;
@@ -58,41 +58,30 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
     private final String componentType;
     private final String componentCanonicalClass;
     private final VariableRegistry variableRegistry;
-    private final ReloadComponent reloadComponent;
+    private final ComponentLog logger;
 
-    private final AtomicBoolean isExtensionMissing;
 
     private final Lock lock = new ReentrantLock();
     private final ConcurrentMap<PropertyDescriptor, String> properties = new ConcurrentHashMap<>();
 
-    public AbstractConfiguredComponent(final String id,
+    public AbstractConfiguredComponent(final ConfigurableComponent component, final String id,
                                        final ValidationContextFactory validationContextFactory, final ControllerServiceProvider serviceProvider,
                                        final String componentType, final String componentCanonicalClass, final VariableRegistry variableRegistry,
-                                       final ReloadComponent reloadComponent, final boolean isExtensionMissing) {
+                                       final ComponentLog logger) {
         this.id = id;
+        this.component = component;
         this.validationContextFactory = validationContextFactory;
         this.serviceProvider = serviceProvider;
-        this.name = new AtomicReference<>(componentType);
+        this.name = new AtomicReference<>(component.getClass().getSimpleName());
         this.componentType = componentType;
         this.componentCanonicalClass = componentCanonicalClass;
         this.variableRegistry = variableRegistry;
-        this.isExtensionMissing = new AtomicBoolean(isExtensionMissing);
-        this.reloadComponent = reloadComponent;
+        this.logger = logger;
     }
 
     @Override
     public String getIdentifier() {
         return id;
-    }
-
-    @Override
-    public void setExtensionMissing(boolean extensionMissing) {
-        this.isExtensionMissing.set(extensionMissing);
-    }
-
-    @Override
-    public boolean isExtensionMissing() {
-        return isExtensionMissing.get();
     }
 
     @Override
@@ -125,11 +114,11 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
         try {
             verifyModifiable();
 
-            try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), id)) {
+            try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), id)) {
                 boolean classpathChanged = false;
                 for (final Map.Entry<String, String> entry : properties.entrySet()) {
                     // determine if any of the property changes require resetting the InstanceClassLoader
-                    final PropertyDescriptor descriptor = getComponent().getPropertyDescriptor(entry.getKey());
+                    final PropertyDescriptor descriptor = component.getPropertyDescriptor(entry.getKey());
                     if (descriptor.isDynamicClasspathModifier()) {
                         classpathChanged = true;
                     }
@@ -166,7 +155,7 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
             throw new IllegalArgumentException("Name or Value can not be null");
         }
 
-        final PropertyDescriptor descriptor = getComponent().getPropertyDescriptor(name);
+        final PropertyDescriptor descriptor = component.getPropertyDescriptor(name);
 
         final String oldValue = properties.put(descriptor, value);
         if (!value.equals(oldValue)) {
@@ -186,7 +175,7 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
             }
 
             try {
-                getComponent().onPropertyModified(descriptor, oldValue, value);
+                component.onPropertyModified(descriptor, oldValue, value);
             } catch (final Exception e) {
                 // nothing really to do here...
             }
@@ -208,7 +197,7 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
             throw new IllegalArgumentException("Name can not be null");
         }
 
-        final PropertyDescriptor descriptor = getComponent().getPropertyDescriptor(name);
+        final PropertyDescriptor descriptor = component.getPropertyDescriptor(name);
         String value = null;
         if (!descriptor.isRequired() && (value = properties.remove(descriptor)) != null) {
 
@@ -222,9 +211,9 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
             }
 
             try {
-                getComponent().onPropertyModified(descriptor, value, null);
+                component.onPropertyModified(descriptor, value, null);
             } catch (final Exception e) {
-                getLogger().error(e.getMessage(), e);
+                logger.error(e.getMessage(), e);
             }
 
             return true;
@@ -234,35 +223,44 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
     }
 
     /**
-     * Triggers the reloading of the underlying component using a new InstanceClassLoader that includes the additional URL resources.
+     * Adds all of the modules identified by the given module paths to the InstanceClassLoader for this component.
      *
      * @param modulePaths a list of module paths where each entry can be a comma-separated list of multiple module paths
      */
     private void processClasspathModifiers(final Set<String> modulePaths) {
         try {
-            // compute the URLs from all the modules paths
             final URL[] urls = ClassLoaderUtils.getURLsForClasspath(modulePaths, null, true);
 
-            // convert to a set of URLs
-            final Set<URL> additionalUrls = new LinkedHashSet<>();
-            if (urls != null) {
-                for (final URL url : urls) {
-                    additionalUrls.add(url);
+            if (logger.isDebugEnabled()) {
+                logger.debug("Adding {} resources to the classpath for {}", new Object[] {urls.length, name});
+                for (URL url : urls) {
+                    logger.debug(url.getFile());
                 }
             }
 
-            // reload the underlying component with a new InstanceClassLoader that includes the new URLs
-            reload(additionalUrls);
+            final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
 
-        } catch (Exception e) {
-            getLogger().warn("Error processing classpath resources for " + id + ": " + e.getMessage(), e);
+            if (!(classLoader instanceof InstanceClassLoader)) {
+                // Really shouldn't happen, but if we somehow got here and don't have an InstanceClassLoader then log a warning and move on
+                final String classLoaderName = classLoader == null ? "null" : classLoader.getClass().getName();
+                if (logger.isWarnEnabled()) {
+                    logger.warn(String.format("Unable to modify the classpath for %s, expected InstanceClassLoader, but found %s", name, classLoaderName));
+                }
+                return;
+            }
+
+            final InstanceClassLoader instanceClassLoader = (InstanceClassLoader) classLoader;
+            instanceClassLoader.setInstanceResources(urls);
+        } catch (MalformedURLException e) {
+            // Shouldn't get here since we are suppressing errors
+            logger.warn("Error processing classpath resources", e);
         }
     }
 
     @Override
     public Map<PropertyDescriptor, String> getProperties() {
-        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), getComponent().getIdentifier())) {
-            final List<PropertyDescriptor> supported = getComponent().getPropertyDescriptors();
+        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), component.getIdentifier())) {
+            final List<PropertyDescriptor> supported = component.getPropertyDescriptors();
             if (supported == null || supported.isEmpty()) {
                 return Collections.unmodifiableMap(properties);
             } else {
@@ -305,124 +303,36 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
 
     @Override
     public String toString() {
-        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), getComponent().getIdentifier())) {
-            return getComponent().toString();
+        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), component.getIdentifier())) {
+            return component.toString();
         }
     }
 
     @Override
     public Collection<ValidationResult> validate(final ValidationContext context) {
-        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), getComponent().getIdentifier())) {
-            final Collection<ValidationResult> validationResults = getComponent().validate(context);
-
-            // validate selected controller services implement the API required by the processor
-
-            final List<PropertyDescriptor> supportedDescriptors = getComponent().getPropertyDescriptors();
-            if (null != supportedDescriptors) {
-                for (final PropertyDescriptor descriptor : supportedDescriptors) {
-                    if (descriptor.getControllerServiceDefinition() == null) {
-                        // skip properties that aren't for a controller service
-                        continue;
-                    }
-
-                    final String controllerServiceId = context.getProperty(descriptor).getValue();
-                    if (controllerServiceId == null) {
-                        // if the property value is null we should already have a validation error
-                        continue;
-                    }
-
-                    final ControllerServiceNode controllerServiceNode = getControllerServiceProvider().getControllerServiceNode(controllerServiceId);
-                    if (controllerServiceNode == null) {
-                        // if the node was null we should already have a validation error
-                        continue;
-                    }
-
-                    final Class<? extends ControllerService> controllerServiceApiClass = descriptor.getControllerServiceDefinition();
-                    final ClassLoader controllerServiceApiClassLoader = controllerServiceApiClass.getClassLoader();
-
-                    final Bundle controllerServiceApiBundle = ExtensionManager.getBundle(controllerServiceApiClassLoader);
-                    final BundleCoordinate controllerServiceApiCoordinate = controllerServiceApiBundle.getBundleDetails().getCoordinate();
-
-                    final Bundle controllerServiceBundle = ExtensionManager.getBundle(controllerServiceNode.getBundleCoordinate());
-                    final BundleCoordinate controllerServiceCoordinate = controllerServiceBundle.getBundleDetails().getCoordinate();
-
-                    final boolean matchesApi = matchesApi(controllerServiceBundle, controllerServiceApiCoordinate);
-
-                    if (!matchesApi) {
-                        final String controllerServiceType = controllerServiceNode.getComponentType();
-                        final String controllerServiceApiType = controllerServiceApiClass.getSimpleName();
-
-                        final String explanation = new StringBuilder()
-                                .append(controllerServiceType).append(" - ").append(controllerServiceCoordinate.getVersion())
-                                .append(" from ").append(controllerServiceCoordinate.getGroup()).append(" - ").append(controllerServiceCoordinate.getId())
-                                .append(" is not compatible with ").append(controllerServiceApiType).append(" - ").append(controllerServiceApiCoordinate.getVersion())
-                                .append(" from ").append(controllerServiceApiCoordinate.getGroup()).append(" - ").append(controllerServiceApiCoordinate.getId())
-                                .toString();
-
-                        validationResults.add(new ValidationResult.Builder()
-                                .input(controllerServiceId)
-                                .subject(descriptor.getDisplayName())
-                                .valid(false)
-                                .explanation(explanation)
-                                .build());
-                    }
-
-                }
-            }
-
-            return validationResults;
+        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), component.getIdentifier())) {
+            return component.validate(context);
         }
-    }
-
-    /**
-     * Determines if the given controller service node has the required API as an ancestor.
-     *
-     * @param controllerServiceImplBundle the bundle of a controller service being referenced by a processor
-     * @param requiredApiCoordinate the controller service API required by the processor
-     * @return true if the controller service node has the require API as an ancestor, false otherwise
-     */
-    private boolean matchesApi(final Bundle controllerServiceImplBundle, final BundleCoordinate requiredApiCoordinate) {
-        // start with the coordinate of the controller service for cases where the API and service are in the same bundle
-        BundleCoordinate controllerServiceDependencyCoordinate = controllerServiceImplBundle.getBundleDetails().getCoordinate();
-
-        boolean foundApiDependency = false;
-        while (controllerServiceDependencyCoordinate != null) {
-            // determine if the dependency coordinate matches the required API
-            if (requiredApiCoordinate.equals(controllerServiceDependencyCoordinate)) {
-                foundApiDependency = true;
-                break;
-            }
-
-            // move to the next dependency in the chain, or stop if null
-            final Bundle controllerServiceDependencyBundle = ExtensionManager.getBundle(controllerServiceDependencyCoordinate);
-            if (controllerServiceDependencyBundle == null) {
-                controllerServiceDependencyCoordinate = null;
-            } else {
-                controllerServiceDependencyCoordinate = controllerServiceDependencyBundle.getBundleDetails().getDependencyCoordinate();
-            }
-        }
-
-        return foundApiDependency;
     }
 
     @Override
     public PropertyDescriptor getPropertyDescriptor(final String name) {
-        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), getComponent().getIdentifier())) {
-            return getComponent().getPropertyDescriptor(name);
+        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), component.getIdentifier())) {
+            return component.getPropertyDescriptor(name);
         }
     }
 
     @Override
     public void onPropertyModified(final PropertyDescriptor descriptor, final String oldValue, final String newValue) {
-        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), getComponent().getIdentifier())) {
-            getComponent().onPropertyModified(descriptor, oldValue, newValue);
+        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), component.getIdentifier())) {
+            component.onPropertyModified(descriptor, oldValue, newValue);
         }
     }
 
     @Override
     public List<PropertyDescriptor> getPropertyDescriptors() {
-        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), getComponent().getIdentifier())) {
-            return getComponent().getPropertyDescriptors();
+        try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), component.getIdentifier())) {
+            return component.getPropertyDescriptors();
         }
     }
 
@@ -453,8 +363,8 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
                 serviceIdentifiersNotToValidate, getProperties(), getAnnotationData(), getProcessGroupIdentifier(), getIdentifier());
 
             final Collection<ValidationResult> validationResults;
-            try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(getComponent().getClass(), getComponent().getIdentifier())) {
-                validationResults = getComponent().validate(validationContext);
+            try (final NarCloseable narCloseable = NarCloseable.withComponentNarLoader(component.getClass(), component.getIdentifier())) {
+                validationResults = component.validate(validationContext);
             }
 
             for (final ValidationResult result : validationResults) {
@@ -497,23 +407,4 @@ public abstract class AbstractConfiguredComponent implements ConfigurableCompone
         return this.variableRegistry;
     }
 
-    protected ReloadComponent getReloadComponent() {
-        return this.reloadComponent;
-    }
-
-    @Override
-    public void verifyCanUpdateBundle(final BundleCoordinate incomingCoordinate) throws IllegalArgumentException {
-        final BundleCoordinate existingCoordinate = getBundleCoordinate();
-
-        // determine if this update is changing the bundle for the processor
-        if (!existingCoordinate.equals(incomingCoordinate)) {
-            // if it is changing the bundle, only allow it to change to a different version within same group and id
-            if (!existingCoordinate.getGroup().equals(incomingCoordinate.getGroup())
-                    || !existingCoordinate.getId().equals(incomingCoordinate.getId())) {
-                throw new IllegalArgumentException(String.format(
-                        "Unable to update component %s from %s to %s because bundle group and id must be the same.",
-                        getIdentifier(), existingCoordinate.getCoordinate(), incomingCoordinate.getCoordinate()));
-            }
-        }
-    }
 }

@@ -92,9 +92,7 @@ public class GetHTMLElement
             .Builder().name("Attribute Name")
             .description(("When getting the value of a HTML element attribute this value is used as the key to determine" +
                     " which attribute on the selected element should be retrieved. This value is used when the \"Output Type\"" +
-                    " is set to \"" + ELEMENT_ATTRIBUTE + "\"." +
-                    " If this value is prefixed with 'abs:', then the extracted attribute value will be converted into" +
-                    " an absolute URL form using the specified base URL."))
+                    " is set to \"" + ELEMENT_ATTRIBUTE + "\""))
             .required(false)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .expressionLanguageSupported(true)
@@ -240,8 +238,4 @@ public class GetHTMLElement
         }
     }
 
-    @Override
-    protected String getBaseUrl(FlowFile inputFlowFile, ProcessContext context) {
-        return context.getProperty(URL).evaluateAttributeExpressions(inputFlowFile).getValue();
-    }
 }

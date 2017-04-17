@@ -24,7 +24,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
 import org.apache.hadoop.security.AccessControlException;
-import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.behavior.InputRequirement.Requirement;
 import org.apache.nifi.annotation.behavior.Restricted;
@@ -47,7 +46,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -114,10 +112,9 @@ public class FetchHDFS extends AbstractHadoopProcessor {
         }
 
         final FileSystem hdfs = getFileSystem();
-        final UserGroupInformation ugi = getUserGroupInformation();
         final String filenameValue = context.getProperty(FILENAME).evaluateAttributeExpressions(flowFile).getValue();
 
-        final Path path;
+        Path path = null;
         try {
             path = new Path(filenameValue);
         } catch (IllegalArgumentException e) {
@@ -128,64 +125,54 @@ public class FetchHDFS extends AbstractHadoopProcessor {
             return;
         }
 
+        InputStream stream = null;
+        CompressionCodec codec = null;
+        Configuration conf = getConfiguration();
+        final CompressionCodecFactory compressionCodecFactory = new CompressionCodecFactory(conf);
+        final CompressionType compressionType = CompressionType.valueOf(context.getProperty(COMPRESSION_CODEC).toString());
+        final boolean inferCompressionCodec = compressionType == CompressionType.AUTOMATIC;
+
+        if(inferCompressionCodec) {
+            codec = compressionCodecFactory.getCodec(path);
+        } else if (compressionType != CompressionType.NONE) {
+            codec = getCompressionCodec(context, getConfiguration());
+        }
+
         final URI uri = path.toUri();
         final StopWatch stopWatch = new StopWatch(true);
-        final FlowFile finalFlowFile = flowFile;
+        try {
 
-        ugi.doAs(new PrivilegedAction<Object>() {
-            @Override
-            public Object run() {
-                InputStream stream = null;
-                CompressionCodec codec = null;
-                Configuration conf = getConfiguration();
-                final CompressionCodecFactory compressionCodecFactory = new CompressionCodecFactory(conf);
-                final CompressionType compressionType = CompressionType.valueOf(context.getProperty(COMPRESSION_CODEC).toString());
-                final boolean inferCompressionCodec = compressionType == CompressionType.AUTOMATIC;
+            final String outputFilename;
+            final String originalFilename = path.getName();
+            stream = hdfs.open(path, 16384);
 
-                if(inferCompressionCodec) {
-                    codec = compressionCodecFactory.getCodec(path);
-                } else if (compressionType != CompressionType.NONE) {
-                    codec = getCompressionCodec(context, getConfiguration());
-                }
-
-                FlowFile flowFile = finalFlowFile;
-                try {
-                    final String outputFilename;
-                    final String originalFilename = path.getName();
-                    stream = hdfs.open(path, 16384);
-
-                    // Check if compression codec is defined (inferred or otherwise)
-                    if (codec != null) {
-                        stream = codec.createInputStream(stream);
-                        outputFilename = StringUtils.removeEnd(originalFilename, codec.getDefaultExtension());
-                    } else {
-                        outputFilename = originalFilename;
-                    }
-
-                    flowFile = session.importFrom(stream, finalFlowFile);
-                    flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), outputFilename);
-
-                    stopWatch.stop();
-                    getLogger().info("Successfully received content from {} for {} in {}", new Object[] {uri, flowFile, stopWatch.getDuration()});
-                    session.getProvenanceReporter().fetch(flowFile, uri.toString(), stopWatch.getDuration(TimeUnit.MILLISECONDS));
-                    session.transfer(flowFile, REL_SUCCESS);
-                } catch (final FileNotFoundException | AccessControlException e) {
-                    getLogger().error("Failed to retrieve content from {} for {} due to {}; routing to failure", new Object[] {uri, flowFile, e});
-                    flowFile = session.putAttribute(flowFile, "hdfs.failure.reason", e.getMessage());
-                    flowFile = session.penalize(flowFile);
-                    session.transfer(flowFile, REL_FAILURE);
-                } catch (final IOException e) {
-                    getLogger().error("Failed to retrieve content from {} for {} due to {}; routing to comms.failure", new Object[] {uri, flowFile, e});
-                    flowFile = session.penalize(flowFile);
-                    session.transfer(flowFile, REL_COMMS_FAILURE);
-                } finally {
-                    IOUtils.closeQuietly(stream);
-                }
-
-                return null;
+            // Check if compression codec is defined (inferred or otherwise)
+            if (codec != null) {
+                stream = codec.createInputStream(stream);
+                outputFilename = StringUtils.removeEnd(originalFilename, codec.getDefaultExtension());
+            } else {
+                outputFilename = originalFilename;
             }
-        });
 
+            flowFile = session.importFrom(stream, flowFile);
+            flowFile = session.putAttribute(flowFile, CoreAttributes.FILENAME.key(), outputFilename);
+
+            stopWatch.stop();
+            getLogger().info("Successfully received content from {} for {} in {}", new Object[] {uri, flowFile, stopWatch.getDuration()});
+            session.getProvenanceReporter().fetch(flowFile, uri.toString(), stopWatch.getDuration(TimeUnit.MILLISECONDS));
+            session.transfer(flowFile, REL_SUCCESS);
+        } catch (final FileNotFoundException | AccessControlException e) {
+            getLogger().error("Failed to retrieve content from {} for {} due to {}; routing to failure", new Object[] {uri, flowFile, e});
+            flowFile = session.putAttribute(flowFile, "hdfs.failure.reason", e.getMessage());
+            flowFile = session.penalize(flowFile);
+            session.transfer(flowFile, REL_FAILURE);
+        } catch (final IOException e) {
+            getLogger().error("Failed to retrieve content from {} for {} due to {}; routing to comms.failure", new Object[] {uri, flowFile, e});
+            flowFile = session.penalize(flowFile);
+            session.transfer(flowFile, REL_COMMS_FAILURE);
+        } finally {
+            IOUtils.closeQuietly(stream);
+        }
     }
 
 }

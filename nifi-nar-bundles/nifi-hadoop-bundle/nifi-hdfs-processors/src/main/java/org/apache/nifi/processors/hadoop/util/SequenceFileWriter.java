@@ -18,7 +18,6 @@ package org.apache.nifi.processors.hadoop.util;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.SequenceFile.CompressionType;
-import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.ProcessSession;
 
@@ -32,8 +31,7 @@ public interface SequenceFileWriter {
      * @param session session
      * @param configuration configuration
      * @param compressionType compression type
-     * @param compressionCodec compression codec
      * @return the written to SequenceFile flow file
      */
-    FlowFile writeSequenceFile(FlowFile flowFile, ProcessSession session, Configuration configuration, CompressionType compressionType, CompressionCodec compressionCodec);
+    FlowFile writeSequenceFile(FlowFile flowFile, ProcessSession session, Configuration configuration, CompressionType compressionType);
 }

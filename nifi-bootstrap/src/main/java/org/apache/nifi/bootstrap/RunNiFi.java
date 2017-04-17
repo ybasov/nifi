@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -54,7 +55,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.bootstrap.notification.NotificationType;
-import org.apache.nifi.bootstrap.util.OSUtils;
 import org.apache.nifi.util.file.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1066,15 +1066,12 @@ public class RunNiFi {
 
         Process process = builder.start();
         handleLogging(process);
-        Long pid = OSUtils.getProcessId(process, cmdLogger);
-        if (pid == null) {
-            cmdLogger.warn("Launched Apache NiFi but could not determined the Process ID");
-        } else {
+        Long pid = getPid(process, cmdLogger);
+        if (pid != null) {
             nifiPid = pid;
             final Properties pidProperties = new Properties();
             pidProperties.setProperty(PID_KEY, String.valueOf(nifiPid));
             savePidProperties(pidProperties, cmdLogger);
-            cmdLogger.info("Launched Apache NiFi with Process ID " + pid);
         }
 
         shutdownHook = new ShutdownHook(process, this, secretKey, gracefulShutdownSeconds, loggingExecutor);
@@ -1131,15 +1128,12 @@ public class RunNiFi {
                     process = builder.start();
                     handleLogging(process);
 
-                    pid = OSUtils.getProcessId(process, defaultLogger);
-                    if (pid == null) {
-                        cmdLogger.warn("Launched Apache NiFi but could not obtain the Process ID");
-                    } else {
+                    pid = getPid(process, defaultLogger);
+                    if (pid != null) {
                         nifiPid = pid;
                         final Properties pidProperties = new Properties();
                         pidProperties.setProperty(PID_KEY, String.valueOf(nifiPid));
                         savePidProperties(pidProperties, defaultLogger);
-                        cmdLogger.info("Launched Apache NiFi with Process ID " + pid);
                     }
 
                     shutdownHook = new ShutdownHook(process, this, secretKey, gracefulShutdownSeconds, loggingExecutor);
@@ -1214,6 +1208,24 @@ public class RunNiFi {
         this.loggingFutures = futures;
     }
 
+    private Long getPid(final Process process, final Logger logger) {
+        try {
+            final Class<?> procClass = process.getClass();
+            final Field pidField = procClass.getDeclaredField("pid");
+            pidField.setAccessible(true);
+            final Object pidObject = pidField.get(process);
+
+            logger.debug("PID Object = {}", pidObject);
+
+            if (pidObject instanceof Number) {
+                return ((Number) pidObject).longValue();
+            }
+            return null;
+        } catch (final IllegalAccessException | NoSuchFieldException nsfe) {
+            logger.debug("Could not find PID for child process due to {}", nsfe);
+            return null;
+        }
+    }
 
     private boolean isWindows() {
         final String osName = System.getProperty("os.name");

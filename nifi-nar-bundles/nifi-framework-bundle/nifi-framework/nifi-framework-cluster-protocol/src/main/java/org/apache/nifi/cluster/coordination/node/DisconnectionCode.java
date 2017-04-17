@@ -30,7 +30,7 @@ public enum DisconnectionCode {
     /**
      * The node has not yet connected to the cluster
      */
-    NOT_YET_CONNECTED("Has Not Yet Connected to Cluster"),
+    NOT_YET_CONNECTED("Not Has Not Yet Connected to Cluster"),
 
     /**
      * A user explicitly disconnected the node from the cluster
@@ -56,11 +56,6 @@ public enum DisconnectionCode {
      * The node's flow did not match the cluster's flow
      */
     MISMATCHED_FLOWS("Node's Flow did not Match Cluster Flow"),
-
-    /**
-     * The node was missing a bundle used the cluster flow.
-     */
-    MISSING_BUNDLE("Node was missing bundle used by Cluster Flow"),
 
     /**
      * Cannot communicate with the node

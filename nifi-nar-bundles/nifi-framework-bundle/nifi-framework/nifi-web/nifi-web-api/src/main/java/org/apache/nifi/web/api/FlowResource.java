@@ -35,15 +35,12 @@ import org.apache.nifi.authorization.resource.Authorizable;
 import org.apache.nifi.authorization.resource.ResourceFactory;
 import org.apache.nifi.authorization.user.NiFiUser;
 import org.apache.nifi.authorization.user.NiFiUserUtils;
-import org.apache.nifi.bundle.Bundle;
-import org.apache.nifi.bundle.BundleDetails;
 import org.apache.nifi.cluster.coordination.ClusterCoordinator;
 import org.apache.nifi.cluster.coordination.node.NodeConnectionState;
 import org.apache.nifi.cluster.manager.NodeResponse;
 import org.apache.nifi.cluster.protocol.NodeIdentifier;
 import org.apache.nifi.controller.ScheduledState;
 import org.apache.nifi.groups.ProcessGroup;
-import org.apache.nifi.nar.NarClassLoaders;
 import org.apache.nifi.util.NiFiProperties;
 import org.apache.nifi.web.IllegalClusterResourceRequestException;
 import org.apache.nifi.web.NiFiServiceFacade;
@@ -221,12 +218,12 @@ public class FlowResource extends ApplicationResource {
                 .accessAttempt(true)
                 .action(RequestAction.READ)
                 .userContext(userContext)
-                .explanationSupplier(() -> "Unable to view the user interface.")
                 .build();
 
         final AuthorizationResult result = authorizer.authorize(request);
         if (!Result.Approved.equals(result.getResult())) {
-            throw new AccessDeniedException(result.getExplanation());
+            final String message = StringUtils.isNotBlank(result.getExplanation()) ? result.getExplanation() : "Access is denied";
+            throw new AccessDeniedException(message);
         }
     }
 
@@ -928,32 +925,12 @@ public class FlowResource extends ApplicationResource {
                     @ApiResponse(code = 409, message = "The request was valid but NiFi was not in the appropriate state to process it. Retrying the same request later may be successful.")
             }
     )
-    public Response getProcessorTypes(
-            @ApiParam(
-                value = "If specified, will only return types that are a member of this bundle group.",
-                required = false
-            )
-            @QueryParam("bundleGroupFilter") String bundleGroupFilter,
-            @ApiParam(
-                    value = "If specified, will only return types that are a member of this bundle artifact.",
-                    required = false
-            )
-            @QueryParam("bundleArtifactFilter") String bundleArtifactFilter,
-            @ApiParam(
-                    value = "If specified, will only return types whose fully qualified classname matches.",
-                    required = false
-            )
-            @QueryParam("type") String typeFilter) throws InterruptedException {
-
+    public Response getProcessorTypes() throws InterruptedException {
         authorizeFlow();
-
-        if (isReplicateRequest()) {
-            return replicate(HttpMethod.GET);
-        }
 
         // create response entity
         final ProcessorTypesEntity entity = new ProcessorTypesEntity();
-        entity.setProcessorTypes(serviceFacade.getProcessorTypes(bundleGroupFilter, bundleArtifactFilter, typeFilter));
+        entity.setProcessorTypes(serviceFacade.getProcessorTypes());
 
         // generate the response
         return clusterContext(generateOkResponse(entity)).build();
@@ -988,57 +965,16 @@ public class FlowResource extends ApplicationResource {
     )
     public Response getControllerServiceTypes(
             @ApiParam(
-                    value = "If specified, will only return controller services that are compatible with this type of service.",
+                    value = "If specified, will only return controller services of this type.",
                     required = false
             )
-            @QueryParam("serviceType") String serviceType,
-            @ApiParam(
-                    value = "If serviceType specified, is the bundle group of the serviceType.",
-                    required = false
-            )
-            @QueryParam("serviceBundleGroup") String serviceBundleGroup,
-            @ApiParam(
-                    value = "If serviceType specified, is the bundle artifact of the serviceType.",
-                    required = false
-            )
-            @QueryParam("serviceBundleArtifact") String serviceBundleArtifact,
-            @ApiParam(
-                    value = "If serviceType specified, is the bundle version of the serviceType.",
-                    required = false
-            )
-            @QueryParam("serviceBundleVersion") String serviceBundleVersion,
-            @ApiParam(
-                    value = "If specified, will only return types that are a member of this bundle group.",
-                    required = false
-            )
-            @QueryParam("bundleGroupFilter") String bundleGroupFilter,
-            @ApiParam(
-                    value = "If specified, will only return types that are a member of this bundle artifact.",
-                    required = false
-            )
-            @QueryParam("bundleArtifactFilter") String bundleArtifactFilter,
-            @ApiParam(
-                    value = "If specified, will only return types whose fully qualified classname matches.",
-                    required = false
-            )
-            @QueryParam("typeFilter") String typeFilter) throws InterruptedException {
+            @QueryParam("serviceType") String serviceType) throws InterruptedException {
 
         authorizeFlow();
 
-        if (serviceType != null) {
-            if (serviceBundleGroup == null || serviceBundleArtifact == null || serviceBundleVersion == null) {
-                throw new IllegalArgumentException("When specifying the serviceType the serviceBundleGroup, serviceBundleArtifact, and serviceBundleVersion must be specified.");
-            }
-        }
-
-        if (isReplicateRequest()) {
-            return replicate(HttpMethod.GET);
-        }
-
         // create response entity
         final ControllerServiceTypesEntity entity = new ControllerServiceTypesEntity();
-        entity.setControllerServiceTypes(serviceFacade.getControllerServiceTypes(serviceType, serviceBundleGroup, serviceBundleArtifact, serviceBundleVersion,
-                bundleGroupFilter, bundleArtifactFilter, typeFilter));
+        entity.setControllerServiceTypes(serviceFacade.getControllerServiceTypes(serviceType));
 
         // generate the response
         return clusterContext(generateOkResponse(entity)).build();
@@ -1070,32 +1006,12 @@ public class FlowResource extends ApplicationResource {
                     @ApiResponse(code = 409, message = "The request was valid but NiFi was not in the appropriate state to process it. Retrying the same request later may be successful.")
             }
     )
-    public Response getReportingTaskTypes(
-            @ApiParam(
-                    value = "If specified, will only return types that are a member of this bundle group.",
-                    required = false
-            )
-            @QueryParam("bundleGroupFilter") String bundleGroupFilter,
-            @ApiParam(
-                    value = "If specified, will only return types that are a member of this bundle artifact.",
-                    required = false
-            )
-            @QueryParam("bundleArtifactFilter") String bundleArtifactFilter,
-            @ApiParam(
-                    value = "If specified, will only return types whose fully qualified classname matches.",
-                    required = false
-            )
-            @QueryParam("type") String typeFilter) throws InterruptedException {
-
+    public Response getReportingTaskTypes() throws InterruptedException {
         authorizeFlow();
-
-        if (isReplicateRequest()) {
-            return replicate(HttpMethod.GET);
-        }
 
         // create response entity
         final ReportingTaskTypesEntity entity = new ReportingTaskTypesEntity();
-        entity.setReportingTaskTypes(serviceFacade.getReportingTaskTypes(bundleGroupFilter, bundleArtifactFilter, typeFilter));
+        entity.setReportingTaskTypes(serviceFacade.getReportingTaskTypes());
 
         // generate the response
         return clusterContext(generateOkResponse(entity)).build();
@@ -1129,10 +1045,6 @@ public class FlowResource extends ApplicationResource {
     )
     public Response getPrioritizers() throws InterruptedException {
         authorizeFlow();
-
-        if (isReplicateRequest()) {
-            return replicate(HttpMethod.GET);
-        }
 
         // create response entity
         final PrioritizerTypesEntity entity = new PrioritizerTypesEntity();
@@ -1172,6 +1084,7 @@ public class FlowResource extends ApplicationResource {
         // create the about dto
         final AboutDTO aboutDTO = new AboutDTO();
         aboutDTO.setTitle("NiFi");
+        aboutDTO.setVersion(getProperties().getUiTitle());
         aboutDTO.setUri(generateResourceUri());
         aboutDTO.setTimezone(new Date());
 
@@ -1179,19 +1092,11 @@ public class FlowResource extends ApplicationResource {
         final NiFiProperties properties = getProperties();
         aboutDTO.setContentViewerUrl(properties.getProperty(NiFiProperties.CONTENT_VIEWER_URL));
 
-        final Bundle frameworkBundle = NarClassLoaders.getInstance().getFrameworkBundle();
-        if (frameworkBundle != null) {
-            final BundleDetails frameworkDetails = frameworkBundle.getBundleDetails();
-
-            // set the version
-            aboutDTO.setVersion(frameworkDetails.getCoordinate().getVersion());
-
-            // Get build info
-            aboutDTO.setBuildTag(frameworkDetails.getBuildTag());
-            aboutDTO.setBuildRevision(frameworkDetails.getBuildRevision());
-            aboutDTO.setBuildBranch(frameworkDetails.getBuildBranch());
-            aboutDTO.setBuildTimestamp(frameworkDetails.getBuildTimestampDate());
-        }
+        // Get build info
+        aboutDTO.setBuildTag(properties.getProperty(NiFiProperties.BUILD_TAG));
+        aboutDTO.setBuildRevision(properties.getProperty(NiFiProperties.BUILD_REVISION));
+        aboutDTO.setBuildBranch(properties.getProperty(NiFiProperties.BUILD_BRANCH));
+        aboutDTO.setBuildTimestamp(properties.getBuildTimestamp());
 
         // create the response entity
         final AboutEntity entity = new AboutEntity();
@@ -2224,29 +2129,7 @@ public class FlowResource extends ApplicationResource {
                 // ignore as the component may not be a reporting task
             }
 
-            // a component for the specified id could not be found, attempt to authorize based on read to the controller
-            final Map<String, String> userContext;
-            if (!StringUtils.isBlank(user.getClientAddress())) {
-                userContext = new HashMap<>();
-                userContext.put(UserContextKeys.CLIENT_ADDRESS.name(), user.getClientAddress());
-            } else {
-                userContext = null;
-            }
-
-            final AuthorizationRequest request = new AuthorizationRequest.Builder()
-                    .resource(ResourceFactory.getControllerResource())
-                    .identity(user.getIdentity())
-                    .anonymous(user.isAnonymous())
-                    .accessAttempt(true)
-                    .action(RequestAction.READ)
-                    .userContext(userContext)
-                    .explanationSupplier(() -> String.format("Unable to find component with id '%s' and unable to view the controller.", componentId))
-                    .build();
-
-            final AuthorizationResult result = authorizer.authorize(request);
-            if (!Result.Approved.equals(result.getResult())) {
-                throw new AccessDeniedException(result.getExplanation());
-            }
+            throw new ResourceNotFoundException(String.format("Unable to find component with id '%s'.", componentId));
         });
 
         // Note: History requests are not replicated throughout the cluster and are instead handled by the nodes independently

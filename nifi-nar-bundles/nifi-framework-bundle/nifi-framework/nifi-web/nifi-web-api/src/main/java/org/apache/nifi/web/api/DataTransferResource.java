@@ -77,8 +77,6 @@ import javax.ws.rs.core.UriInfo;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 
 import static org.apache.commons.lang3.StringUtils.isEmpty;
 import static org.apache.nifi.remote.protocol.HandshakeProperty.BATCH_COUNT;
@@ -318,14 +316,7 @@ public class DataTransferResource extends ApplicationResource {
 
     private Peer constructPeer(final HttpServletRequest req, final InputStream inputStream,
                                final OutputStream outputStream, final String portId, final String transactionId) {
-        String clientHostName = req.getRemoteHost();
-        try {
-            // req.getRemoteHost returns IP address, try to resolve hostname to be consistent with RAW protocol.
-            final InetAddress clientAddress = InetAddress.getByName(clientHostName);
-            clientHostName = clientAddress.getHostName();
-        } catch (UnknownHostException e) {
-            logger.info("Failed to resolve client hostname {}, due to {}", clientHostName, e.getMessage());
-        }
+        final String clientHostName = req.getRemoteHost();
         final int clientPort = req.getRemotePort();
 
         final PeerDescription peerDescription = new PeerDescription(clientHostName, clientPort, req.isSecure());

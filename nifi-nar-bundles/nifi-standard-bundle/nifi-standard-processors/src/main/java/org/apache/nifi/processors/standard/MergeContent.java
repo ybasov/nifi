@@ -16,12 +16,9 @@
  */
 package org.apache.nifi.processors.standard;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -40,7 +37,6 @@ import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.avro.Schema;
@@ -71,7 +67,6 @@ import org.apache.nifi.components.ValidationContext;
 import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.flowfile.attributes.CoreAttributes;
-import org.apache.nifi.flowfile.attributes.FragmentAttributes;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.Relationship;
@@ -82,6 +77,8 @@ import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.processor.util.bin.Bin;
 import org.apache.nifi.processor.util.bin.BinFiles;
 import org.apache.nifi.processor.util.bin.BinManager;
+import org.apache.nifi.stream.io.BufferedInputStream;
+import org.apache.nifi.stream.io.BufferedOutputStream;
 import org.apache.nifi.stream.io.NonCloseableOutputStream;
 import org.apache.nifi.stream.io.StreamUtils;
 import org.apache.nifi.util.FlowFilePackager;
@@ -130,15 +127,15 @@ import org.apache.nifi.util.FlowFilePackagerV3;
 public class MergeContent extends BinFiles {
 
     // preferred attributes
-    public static final String FRAGMENT_ID_ATTRIBUTE = FragmentAttributes.FRAGMENT_ID.key();
-    public static final String FRAGMENT_INDEX_ATTRIBUTE = FragmentAttributes.FRAGMENT_INDEX.key();
-    public static final String FRAGMENT_COUNT_ATTRIBUTE = FragmentAttributes.FRAGMENT_COUNT.key();
+    public static final String FRAGMENT_ID_ATTRIBUTE = "fragment.identifier";
+    public static final String FRAGMENT_INDEX_ATTRIBUTE = "fragment.index";
+    public static final String FRAGMENT_COUNT_ATTRIBUTE = "fragment.count";
 
     // old style attributes
     public static final String SEGMENT_ID_ATTRIBUTE = "segment.identifier";
     public static final String SEGMENT_INDEX_ATTRIBUTE = "segment.index";
     public static final String SEGMENT_COUNT_ATTRIBUTE = "segment.count";
-    public static final String SEGMENT_ORIGINAL_FILENAME = FragmentAttributes.SEGMENT_ORIGINAL_FILENAME.key();
+    public static final String SEGMENT_ORIGINAL_FILENAME = "segment.original.filename";
 
     public static final AllowableValue MERGE_STRATEGY_BIN_PACK = new AllowableValue(
             "Bin-Packing Algorithm",
@@ -623,11 +620,11 @@ public class MergeContent extends BinFiles {
             byte[] property = null;
             final String descriptorValue = context.getProperty(descriptor).evaluateAttributeExpressions().getValue();
             if (descriptorValue != null && flowFiles != null && flowFiles.size() > 0) {
-                final String content = new String(readContent(descriptorValue), StandardCharsets.UTF_8);
+                final String content = new String(readContent(descriptorValue));
                 final FlowFile flowFile = flowFiles.get(0);
                 if (flowFile != null && content != null) {
                     final PropertyValue propVal = context.newPropertyValue(content).evaluateAttributeExpressions(flowFile);
-                    property = propVal.getValue().getBytes(StandardCharsets.UTF_8);
+                    property = propVal.getValue().getBytes();
                 }
             }
             return property;
@@ -641,7 +638,7 @@ public class MergeContent extends BinFiles {
                 if (flowFile != null) {
                     final String value = context.getProperty(descriptor).evaluateAttributeExpressions(flowFile).getValue();
                     if (value != null) {
-                        property = value.getBytes(StandardCharsets.UTF_8);
+                        property = value.getBytes();
                     }
                 }
             }
@@ -782,6 +779,7 @@ public class MergeContent extends BinFiles {
                                         if (attributes.containsKey(CoreAttributes.MIME_TYPE.key())) {
                                             attributes.put("content-type", attributes.get(CoreAttributes.MIME_TYPE.key()));
                                         }
+
                                         packager.packageFlowFile(in, out, attributes, flowFile.getSize());
                                     }
                                 }
@@ -811,8 +809,6 @@ public class MergeContent extends BinFiles {
 
         private final int compressionLevel;
 
-        private List<FlowFile> unmerged = new ArrayList<>();
-
         public ZipMerge(final int compressionLevel) {
             this.compressionLevel = compressionLevel;
         }
@@ -823,7 +819,6 @@ public class MergeContent extends BinFiles {
 
             final ProcessSession session = bin.getSession();
             final List<FlowFile> contents = bin.getContents();
-            unmerged.addAll(contents);
 
             FlowFile bundle = session.create(contents);
 
@@ -839,15 +834,10 @@ public class MergeContent extends BinFiles {
                             final String entryName = path + flowFile.getAttribute(CoreAttributes.FILENAME.key());
                             final ZipEntry zipEntry = new ZipEntry(entryName);
                             zipEntry.setSize(flowFile.getSize());
-                            try {
-                                out.putNextEntry(zipEntry);
+                            out.putNextEntry(zipEntry);
 
-                                bin.getSession().exportTo(flowFile, out);
-                                out.closeEntry();
-                                unmerged.remove(flowFile);
-                            } catch (ZipException e) {
-                                getLogger().error("Encountered exception merging {}", new Object[]{flowFile}, e);
-                            }
+                            bin.getSession().exportTo(flowFile, out);
+                            out.closeEntry();
                         }
 
                         out.finish();
@@ -867,7 +857,7 @@ public class MergeContent extends BinFiles {
 
         @Override
         public List<FlowFile> getUnmergedFlowFiles() {
-            return unmerged;
+            return Collections.emptyList();
         }
     }
 

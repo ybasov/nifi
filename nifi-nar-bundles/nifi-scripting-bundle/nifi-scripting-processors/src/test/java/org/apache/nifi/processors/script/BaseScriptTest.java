@@ -35,8 +35,8 @@ public abstract class BaseScriptTest {
 
     public final String TEST_RESOURCE_LOCATION = "target/test/resources/";
 
+
     protected TestRunner runner;
-    protected AccessibleScriptingComponentHelper scriptingComponent;
 
     /**
      * Copies all scripts to the target directory because when they are compiled they can leave unwanted .class files.
@@ -49,19 +49,17 @@ public abstract class BaseScriptTest {
     }
 
     public void setupExecuteScript() throws Exception {
-        final ExecuteScript executeScript = new AccessibleExecuteScript();
+        final ExecuteScript executeScript = new ExecuteScript();
         // Need to do something to initialize the properties, like retrieve the list of properties
         assertNotNull(executeScript.getSupportedPropertyDescriptors());
         runner = TestRunners.newTestRunner(executeScript);
-        scriptingComponent = (AccessibleScriptingComponentHelper) executeScript;
     }
 
     public void setupInvokeScriptProcessor() throws Exception {
-        final InvokeScriptedProcessor invokeScriptedProcessor = new AccessibleInvokeScriptedProcessor();
+        final InvokeScriptedProcessor invokeScriptedProcessor = new InvokeScriptedProcessor();
         // Need to do something to initialize the properties, like retrieve the list of properties
         assertNotNull(invokeScriptedProcessor.getSupportedPropertyDescriptors());
         runner = TestRunners.newTestRunner(invokeScriptedProcessor);
-        scriptingComponent = (AccessibleScriptingComponentHelper) invokeScriptedProcessor;
     }
 
     public String getFileContentsAsString(String path) {
@@ -69,20 +67,6 @@ public abstract class BaseScriptTest {
             return new String(Files.readAllBytes(Paths.get(path)));
         } catch (IOException ioe) {
             return null;
-        }
-    }
-
-    class AccessibleExecuteScript extends ExecuteScript implements AccessibleScriptingComponentHelper {
-        @Override
-        public ScriptingComponentHelper getScriptingComponentHelper() {
-            return this.scriptingComponentHelper;
-        }
-    }
-
-    class AccessibleInvokeScriptedProcessor extends InvokeScriptedProcessor implements AccessibleScriptingComponentHelper {
-        @Override
-        public ScriptingComponentHelper getScriptingComponentHelper() {
-            return this.scriptingComponentHelper;
         }
     }
 }

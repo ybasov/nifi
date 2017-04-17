@@ -15,37 +15,18 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['d3',
-                'nf.ng.Bridge',
-                'nf.ContextMenu',
-                'nf.CanvasUtils'],
-            function (d3, nfNgBridge, nfContextMenu, nfCanvasUtils) {
-                return (nf.Selectable = factory(d3, nfNgBridge, nfContextMenu, nfCanvasUtils));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.Selectable =
-            factory(require('d3'),
-                require('nf.ng.Bridge'),
-                require('nf.ContextMenu'),
-                require('nf.CanvasUtils')));
-    } else {
-        nf.Selectable = factory(root.d3,
-            root.nf.ng.Bridge,
-            root.nf.ContextMenu,
-            root.nf.CanvasUtils);
-    }
-}(this, function (d3, nfNgBridge, nfContextMenu, nfCanvasUtils) {
-    'use strict';
+nf.Selectable = (function () {
 
-    var nfSelectable = {
+    return {
+        init: function () {
 
+        },
+        
         select: function (g) {
             // hide any context menus as necessary
-            nfContextMenu.hide();
+            nf.ContextMenu.hide();
 
             // only need to update selection if necessary
             if (!g.classed('selected')) {
@@ -63,29 +44,18 @@
                 }
             }
 
-            // inform Angular app that values have changed since the
-            // enabled operate palette buttons are based off of the selection
-            nfNgBridge.digest();
+            // inform Angular app that values have changed
+            nf.ng.Bridge.digest();
 
             // stop propagation
             d3.event.stopPropagation();
         },
-
-        /**
-         * Activates the select behavior for the components in the specified selection.
-         *
-         * @param {selection} components
-         */
+        
         activate: function (components) {
             components.on('mousedown.selection', function () {
                 // get the clicked component to update selection
-                nfSelectable.select(d3.select(this));
-
-                // update URL deep linking params
-                nfCanvasUtils.setURLParameters();
+                nf.Selectable.select(d3.select(this));
             });
         }
     };
-
-    return nfSelectable;
-}));
+}());

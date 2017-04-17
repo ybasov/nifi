@@ -15,142 +15,104 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'nf.Client',
-                'nf.Birdseye',
-                'nf.Graph',
-                'nf.CanvasUtils',
-                'nf.ErrorHandler',
-                'nf.Label'],
-            function ($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler, nfLabel) {
-                return (nf.ng.LabelComponent = factory($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler, nfLabel));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.ng.LabelComponent =
-            factory(require('jquery'),
-                require('nf.Client'),
-                require('nf.Birdseye'),
-                require('nf.Graph'),
-                require('nf.CanvasUtils'),
-                require('nf.ErrorHandler'),
-                require('nf.Label')));
-    } else {
-        nf.ng.LabelComponent = factory(root.$,
-            root.nf.Client,
-            root.nf.Birdseye,
-            root.nf.Graph,
-            root.nf.CanvasUtils,
-            root.nf.ErrorHandler,
-            root.nf.Label);
-    }
-}(this, function ($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler, nfLabel) {
+nf.ng.LabelComponent = function (serviceProvider) {
     'use strict';
 
-    return function (serviceProvider) {
-        'use strict';
+    function LabelComponent() {
+        this.icon = 'icon icon-label';
 
-        function LabelComponent() {
-            this.icon = 'icon icon-label';
+        this.hoverIcon = 'icon icon-label-add';
+    }
+    LabelComponent.prototype = {
+        constructor: LabelComponent,
 
-            this.hoverIcon = 'icon icon-label-add';
-        }
+        /**
+         * Gets the component.
+         *
+         * @returns {*|jQuery|HTMLElement}
+         */
+        getElement: function() {
+            return $('#label-component');
+        },
 
-        LabelComponent.prototype = {
-            constructor: LabelComponent,
+        /**
+         * Enable the component.
+         */
+        enabled: function() {
+            this.getElement().attr('disabled', false);
+        },
 
-            /**
-             * Gets the component.
-             *
-             * @returns {*|jQuery|HTMLElement}
-             */
-            getElement: function () {
-                return $('#label-component');
-            },
+        /**
+         * Disable the component.
+         */
+        disabled: function() {
+            this.getElement().attr('disabled', true);
+        },
 
-            /**
-             * Enable the component.
-             */
-            enabled: function () {
-                this.getElement().attr('disabled', false);
-            },
+        /**
+         * Handler function for when component is dropped on the canvas.
+         *
+         * @argument {object} pt        The point that the component was dropped.
+         */
+        dropHandler: function(pt) {
+            this.createLabel(pt);
+        },
 
-            /**
-             * Disable the component.
-             */
-            disabled: function () {
-                this.getElement().attr('disabled', true);
-            },
+        /**
+         * The drag icon for the toolbox component.
+         *
+         * @param event
+         * @returns {*|jQuery|HTMLElement}
+         */
+        dragIcon: function (event) {
+            return $('<div class="icon icon-label-add"></div>');
+        },
 
-            /**
-             * Handler function for when component is dropped on the canvas.
-             *
-             * @argument {object} pt        The point that the component was dropped.
-             */
-            dropHandler: function (pt) {
-                this.createLabel(pt);
-            },
-
-            /**
-             * The drag icon for the toolbox component.
-             *
-             * @param event
-             * @returns {*|jQuery|HTMLElement}
-             */
-            dragIcon: function (event) {
-                return $('<div class="icon icon-label-add"></div>');
-            },
-
-            /**
-             * Create the label and add to the graph.
-             *
-             * @argument {object} pt        The point that the label was dropped.
-             */
-            createLabel: function (pt) {
-                var labelEntity = {
-                    'revision': nfClient.getRevision({
-                        'revision': {
-                            'version': 0
-                        }
-                    }),
-                    'component': {
-                        'width': nfLabel.config.width,
-                        'height': nfLabel.config.height,
-                        'position': {
-                            'x': pt.x,
-                            'y': pt.y
-                        }
+        /**
+         * Create the label and add to the graph.
+         *
+         * @argument {object} pt        The point that the label was dropped.
+         */
+        createLabel: function(pt) {
+            var labelEntity = {
+                'revision': nf.Client.getRevision({
+                    'revision': {
+                        'version': 0
                     }
-                };
+                }),
+                'component': {
+                    'width': nf.Label.config.width,
+                    'height': nf.Label.config.height,
+                    'position': {
+                        'x': pt.x,
+                        'y': pt.y
+                    }
+                }
+            };
 
-                // create a new label
-                $.ajax({
-                    type: 'POST',
-                    url: serviceProvider.headerCtrl.toolboxCtrl.config.urls.api + '/process-groups/' + encodeURIComponent(nfCanvasUtils.getGroupId()) + '/labels',
-                    data: JSON.stringify(labelEntity),
-                    dataType: 'json',
-                    contentType: 'application/json'
-                }).done(function (response) {
-                    // add the label to the graph
-                    nfGraph.add({
-                        'labels': [response]
-                    }, {
-                        'selectAll': true
-                    });
+            // create a new label
+            $.ajax({
+                type: 'POST',
+                url: serviceProvider.headerCtrl.toolboxCtrl.config.urls.api + '/process-groups/' + encodeURIComponent(nf.Canvas.getGroupId()) + '/labels',
+                data: JSON.stringify(labelEntity),
+                dataType: 'json',
+                contentType: 'application/json'
+            }).done(function (response) {
+                // add the label to the graph
+                nf.Graph.add({
+                    'labels': [response]
+                }, {
+                    'selectAll': true
+                });
 
-                    // update component visibility
-                    nfGraph.updateVisibility();
-
-                    // update the birdseye
-                    nfBirdseye.refresh();
-                }).fail(nfErrorHandler.handleAjaxError);
-            }
+                // update the birdseye
+                nf.Birdseye.refresh();
+            }).fail(nf.Common.handleAjaxError);
         }
+    }
 
-        var labelComponent = new LabelComponent();
-        return labelComponent;
-    };
-}));
+    var labelComponent = new LabelComponent();
+    return labelComponent;
+};

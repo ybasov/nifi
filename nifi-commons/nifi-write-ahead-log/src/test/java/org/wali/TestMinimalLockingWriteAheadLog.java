@@ -23,7 +23,6 @@ import static org.junit.Assert.assertTrue;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
@@ -42,7 +41,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Assert;
@@ -53,144 +51,6 @@ import org.slf4j.LoggerFactory;
 
 public class TestMinimalLockingWriteAheadLog {
     private static final Logger logger = LoggerFactory.getLogger(TestMinimalLockingWriteAheadLog.class);
-
-
-    @Test
-    public void testTruncatedPartitionHeader() throws IOException {
-        final int numPartitions = 4;
-
-        final Path path = Paths.get("target/testTruncatedPartitionHeader");
-        deleteRecursively(path.toFile());
-        assertTrue(path.toFile().mkdirs());
-
-        final AtomicInteger counter = new AtomicInteger(0);
-        final SerDe<Object> serde = new SerDe<Object>() {
-            @Override
-            public void readHeader(DataInputStream in) throws IOException {
-                if (counter.getAndIncrement() == 1) {
-                    throw new EOFException("Intentionally thrown for unit test");
-                }
-            }
-
-            @Override
-            public void serializeEdit(Object previousRecordState, Object newRecordState, DataOutputStream out) throws IOException {
-                out.write(1);
-            }
-
-            @Override
-            public void serializeRecord(Object record, DataOutputStream out) throws IOException {
-                out.write(1);
-            }
-
-            @Override
-            public Object deserializeEdit(DataInputStream in, Map<Object, Object> currentRecordStates, int version) throws IOException {
-                final int val = in.read();
-                return (val == 1) ? new Object() : null;
-            }
-
-            @Override
-            public Object deserializeRecord(DataInputStream in, int version) throws IOException {
-                final int val = in.read();
-                return (val == 1) ? new Object() : null;
-            }
-
-            @Override
-            public Object getRecordIdentifier(Object record) {
-                return 1;
-            }
-
-            @Override
-            public UpdateType getUpdateType(Object record) {
-                return UpdateType.CREATE;
-            }
-
-            @Override
-            public String getLocation(Object record) {
-                return null;
-            }
-
-            @Override
-            public int getVersion() {
-                return 0;
-            }
-        };
-
-        final WriteAheadRepository<Object> repo = new MinimalLockingWriteAheadLog<>(path, numPartitions, serde, (SyncListener) null);
-        try {
-            final Collection<Object> initialRecs = repo.recoverRecords();
-            assertTrue(initialRecs.isEmpty());
-
-            repo.update(Collections.singletonList(new Object()), false);
-            repo.update(Collections.singletonList(new Object()), false);
-            repo.update(Collections.singletonList(new Object()), false);
-        } finally {
-            repo.shutdown();
-        }
-
-        final WriteAheadRepository<Object> secondRepo = new MinimalLockingWriteAheadLog<>(path, numPartitions, serde, (SyncListener) null);
-        try {
-            secondRepo.recoverRecords();
-        } finally {
-            secondRepo.shutdown();
-        }
-    }
-
-    @Test
-    @Ignore("for local testing only")
-    public void testUpdatePerformance() throws IOException, InterruptedException {
-        final int numPartitions = 4;
-
-        final Path path = Paths.get("target/minimal-locking-repo");
-        deleteRecursively(path.toFile());
-        assertTrue(path.toFile().mkdirs());
-
-        final DummyRecordSerde serde = new DummyRecordSerde();
-        final WriteAheadRepository<DummyRecord> repo = new MinimalLockingWriteAheadLog<>(path, numPartitions, serde, null);
-        final Collection<DummyRecord> initialRecs = repo.recoverRecords();
-        assertTrue(initialRecs.isEmpty());
-
-        final int updateCountPerThread = 1_000_000;
-        final int numThreads = 16;
-
-        final Thread[] threads = new Thread[numThreads];
-
-        for (int j = 0; j < 2; j++) {
-            for (int i = 0; i < numThreads; i++) {
-                final Thread t = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        for (int i = 0; i < updateCountPerThread; i++) {
-                            final DummyRecord record = new DummyRecord(String.valueOf(i), UpdateType.CREATE);
-                            try {
-                                repo.update(Collections.singleton(record), false);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                                Assert.fail(e.toString());
-                            }
-                        }
-                    }
-                });
-
-                threads[i] = t;
-            }
-
-            final long start = System.nanoTime();
-            for (final Thread t : threads) {
-                t.start();
-            }
-            for (final Thread t : threads) {
-                t.join();
-            }
-
-            final long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-            if (j == 0) {
-                System.out.println(millis + " ms to insert " + updateCountPerThread * numThreads + " updates using " + numPartitions + " partitions and " + numThreads + " threads, *as a warmup!*");
-            } else {
-                System.out.println(millis + " ms to insert " + updateCountPerThread * numThreads + " updates using " + numPartitions + " partitions and " + numThreads + " threads");
-            }
-        }
-    }
-
 
 
     @Test
@@ -697,10 +557,21 @@ public class TestMinimalLockingWriteAheadLog {
                 assertEquals(2, transactionIndicator);
             }
 
-            // In previous implementations, we would still have a partial record written out.
-            // In the current version, however, the serde above would result in the data serialization
-            // failing and as a result no data would be written to the stream, so the stream should
-            // now be out of data
+            long transactionId = in.readLong();
+            assertEquals(2L, transactionId);
+
+            long thirdSize = in.readLong();
+            assertEquals(8194, thirdSize);
+
+            // should be 8176 A's because we threw an Exception after writing 8194 of them,
+            // but the BufferedOutputStream's buffer already had 8 bytes on it for the
+            // transaction id and the size.
+            for (int i = 0; i < 8176; i++) {
+                final int c = in.read();
+                assertEquals("i = " + i, 'A', c);
+            }
+
+            // Stream should now be out of data, because we threw an Exception!
             final int nextByte = in.read();
             assertEquals(-1, nextByte);
         }

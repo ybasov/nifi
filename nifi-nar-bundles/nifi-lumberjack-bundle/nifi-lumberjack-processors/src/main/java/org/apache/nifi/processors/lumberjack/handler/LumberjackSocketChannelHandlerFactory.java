@@ -31,7 +31,6 @@ import org.apache.nifi.processor.util.listen.handler.ChannelHandlerFactory;
 /**
  * Default factory for creating Lumberjack socket channel handlers.
  */
-@Deprecated
 public class LumberjackSocketChannelHandlerFactory<E extends Event<SocketChannel>> implements ChannelHandlerFactory<E, AsyncChannelDispatcher> {
 
     @Override

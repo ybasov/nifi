@@ -16,10 +16,7 @@
  */
 package org.apache.nifi.processors.standard;
 
-import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.PropertyDescriptor;
-import org.apache.nifi.components.ValidationContext;
-import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.dbcp.DBCPService;
 import org.apache.nifi.processor.AbstractSessionFactoryProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -27,7 +24,6 @@ import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.processors.standard.db.DatabaseAdapter;
-import org.apache.nifi.util.StringUtils;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -40,8 +36,6 @@ import java.sql.Timestamp;
 import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -103,18 +97,15 @@ public abstract class AbstractDatabaseFetchProcessor extends AbstractSessionFact
             .description("The name of the database table to be queried.")
             .required(true)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .expressionLanguageSupported(true)
             .build();
 
     public static final PropertyDescriptor COLUMN_NAMES = new PropertyDescriptor.Builder()
             .name("Columns to Return")
             .description("A comma-separated list of column names to be used in the query. If your database requires "
                     + "special treatment of the names (quoting, e.g.), each name should include such treatment. If no "
-                    + "column names are supplied, all columns in the specified table will be returned. NOTE: It is important "
-                    + "to use consistent column names for a given table for incremental fetch to work properly.")
+                    + "column names are supplied, all columns in the specified table will be returned.")
             .required(false)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .expressionLanguageSupported(true)
             .build();
 
     public static final PropertyDescriptor MAX_VALUE_COLUMN_NAMES = new PropertyDescriptor.Builder()
@@ -126,11 +117,9 @@ public abstract class AbstractDatabaseFetchProcessor extends AbstractSessionFact
                     + "can be used to retrieve only those rows that have been added/updated since the last retrieval. Note that some "
                     + "JDBC types such as bit/boolean are not conducive to maintaining maximum value, so columns of these "
                     + "types should not be listed in this property, and will result in error(s) during processing. If no columns "
-                    + "are provided, all rows from the table will be considered, which could have a performance impact. NOTE: It is important "
-                    + "to use consistent max-value column names for a given table for incremental fetch to work properly.")
+                    + "are provided, all rows from the table will be considered, which could have a performance impact.")
             .required(false)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .expressionLanguageSupported(true)
             .build();
 
     public static final PropertyDescriptor QUERY_TIMEOUT = new PropertyDescriptor.Builder()
@@ -140,7 +129,6 @@ public abstract class AbstractDatabaseFetchProcessor extends AbstractSessionFact
             .defaultValue("0 seconds")
             .required(true)
             .addValidator(StandardValidators.TIME_PERIOD_VALIDATOR)
-            .expressionLanguageSupported(true)
             .build();
 
     public static final PropertyDescriptor NORMALIZE_NAMES_FOR_AVRO = new PropertyDescriptor.Builder()
@@ -155,68 +143,36 @@ public abstract class AbstractDatabaseFetchProcessor extends AbstractSessionFact
 
     protected List<PropertyDescriptor> propDescriptors;
 
-    // The delimiter to use when referencing qualified names (such as table@!@column in the state map)
-    protected static final String NAMESPACE_DELIMITER = "@!@";
-
     public static final PropertyDescriptor DB_TYPE;
 
     protected final static Map<String, DatabaseAdapter> dbAdapters = new HashMap<>();
     protected final Map<String, Integer> columnTypeMap = new HashMap<>();
 
-    // This value is set when the processor is scheduled and indicates whether the Table Name property contains Expression Language.
-    // It is used for backwards-compatibility purposes; if the value is false and the fully-qualified state key (table + column) is not found,
-    // the processor will look for a state key with just the column name.
-    protected volatile boolean isDynamicTableName = false;
-
-    // This value is set when the processor is scheduled and indicates whether the Maximum Value Columns property contains Expression Language.
-    // It is used for backwards-compatibility purposes; if the table name and max-value columns are static, then the column types can be
-    // pre-fetched when the processor is scheduled, rather than having to populate them on-the-fly.
-    protected volatile boolean isDynamicMaxValues = false;
-
     private static SimpleDateFormat TIME_TYPE_FORMAT = new SimpleDateFormat("HH:mm:ss.SSS");
 
     static {
         // Load the DatabaseAdapters
-        ArrayList<AllowableValue> dbAdapterValues = new ArrayList<>();
         ServiceLoader<DatabaseAdapter> dbAdapterLoader = ServiceLoader.load(DatabaseAdapter.class);
-        dbAdapterLoader.forEach(it -> {
-            dbAdapters.put(it.getName(), it);
-            dbAdapterValues.add(new AllowableValue(it.getName(),it.getName(), it.getDescription()));
-        });
+        dbAdapterLoader.forEach(it -> dbAdapters.put(it.getName(), it));
 
         DB_TYPE = new PropertyDescriptor.Builder()
                 .name("db-fetch-db-type")
                 .displayName("Database Type")
                 .description("The type/flavor of database, used for generating database-specific code. In many cases the Generic type "
                         + "should suffice, but some databases (such as Oracle) require custom SQL clauses. ")
-                .allowableValues(dbAdapterValues.toArray(new AllowableValue[dbAdapterValues.size()]))
-                .defaultValue("Generic")
+                .allowableValues(dbAdapters.keySet())
+                .defaultValue(dbAdapters.values().stream().findFirst().get().getName())
                 .required(true)
                 .build();
     }
 
-    // A common validation procedure for DB fetch processors, it stores whether the Table Name and/or Max Value Column properties have expression language
-    protected Collection<ValidationResult> customValidate(ValidationContext validationContext) {
-        // For backwards-compatibility, keep track of whether the table name and max-value column properties are dynamic (i.e. has expression language)
-        isDynamicTableName = validationContext.isExpressionLanguagePresent(validationContext.getProperty(TABLE_NAME).getValue());
-        isDynamicMaxValues = validationContext.isExpressionLanguagePresent(validationContext.getProperty(MAX_VALUE_COLUMN_NAMES).getValue());
-
-        return super.customValidate(validationContext);
-    }
-
     public void setup(final ProcessContext context) {
-        final String maxValueColumnNames = context.getProperty(MAX_VALUE_COLUMN_NAMES).evaluateAttributeExpressions().getValue();
-
-        // If there are no max-value column names specified, we don't need to perform this processing
-        if (StringUtils.isEmpty(maxValueColumnNames)) {
-            return;
-        }
-
         // Try to fill the columnTypeMap with the types of the desired max-value columns
         final DBCPService dbcpService = context.getProperty(DBCP_SERVICE).asControllerService(DBCPService.class);
-        final String tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions().getValue();
-
+        final String tableName = context.getProperty(TABLE_NAME).getValue();
+        final String maxValueColumnNames = context.getProperty(MAX_VALUE_COLUMN_NAMES).getValue();
         final DatabaseAdapter dbAdapter = dbAdapters.get(context.getProperty(DB_TYPE).getValue());
+
         try (final Connection con = dbcpService.getConnection();
              final Statement st = con.createStatement()) {
 
@@ -231,10 +187,10 @@ public abstract class AbstractDatabaseFetchProcessor extends AbstractSessionFact
                 columnTypeMap.clear();
                 for (int i = 1; i <= numCols; i++) {
                     String colName = resultSetMetaData.getColumnName(i).toLowerCase();
-                    String colKey = getStateKey(tableName, colName);
                     int colType = resultSetMetaData.getColumnType(i);
-                    columnTypeMap.putIfAbsent(colKey, colType);
+                    columnTypeMap.put(colName, colType);
                 }
+
             } else {
                 throw new ProcessException("No columns found in table from those specified: " + maxValueColumnNames);
             }
@@ -421,17 +377,5 @@ public abstract class AbstractDatabaseFetchProcessor extends AbstractSessionFact
             default:
                 return value;
         }
-    }
-
-    protected static String getStateKey(String prefix, String columnName) {
-        StringBuilder sb = new StringBuilder();
-        if (prefix != null) {
-            sb.append(prefix.toLowerCase());
-            sb.append(NAMESPACE_DELIMITER);
-        }
-        if (columnName != null) {
-            sb.append(columnName.toLowerCase());
-        }
-        return sb.toString();
     }
 }

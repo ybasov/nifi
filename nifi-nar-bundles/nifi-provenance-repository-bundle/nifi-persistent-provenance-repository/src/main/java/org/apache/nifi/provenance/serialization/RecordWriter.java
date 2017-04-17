@@ -37,10 +37,11 @@ public interface RecordWriter extends Closeable {
      * Writes the given record out to the underlying stream
      *
      * @param record the record to write
+     * @param recordIdentifier the new identifier of the record
      * @return the number of bytes written for the given records
      * @throws IOException if unable to write the record to the stream
      */
-    StorageSummary writeRecord(ProvenanceEventRecord record) throws IOException;
+    long writeRecord(ProvenanceEventRecord record, long recordIdentifier) throws IOException;
 
     /**
      * Flushes any data that is held in a buffer to the underlying storage mechanism
@@ -53,11 +54,6 @@ public interface RecordWriter extends Closeable {
      * @return the number of Records that have been written to this RecordWriter
      */
     int getRecordsWritten();
-
-    /**
-     * @return the number of bytes written to this writer
-     */
-    long getBytesWritten();
 
     /**
      * @return the file that this RecordWriter is writing to
@@ -91,11 +87,6 @@ public interface RecordWriter extends Closeable {
      * writing to this RecordWriter again could cause corruption.
      */
     void markDirty();
-
-    /**
-     * @return <code>true</code> if {@link #markDirty()} has been called, <code>false</code> otherwise
-     */
-    boolean isDirty();
 
     /**
      * Syncs the content written to this writer to disk.

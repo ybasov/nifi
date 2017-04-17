@@ -15,39 +15,14 @@
  * limitations under the License.
  */
 
-/* global top, define, module, require, exports */
+/* global nf, top */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'nf.Common',
-                'nf.ClusterTable',
-                'nf.ErrorHandler',
-                'nf.Storage'],
-            function ($, nfCommon, nfClusterTable, nfErrorHandler, nfStorage) {
-                return (nf.Cluster = factory($, nfCommon, nfClusterTable, nfErrorHandler, nfStorage));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.Cluster =
-            factory(require('jquery'),
-                require('nf.Common'),
-                require('nf.ClusterTable'),
-                require('nf.ErrorHandler'),
-                require('nf.Storage')));
-    } else {
-        nf.Cluster = factory(root.$,
-            root.nf.Common,
-            root.nf.ClusterTable,
-            root.nf.ErrorHandler,
-            root.nf.Storage);
-    }
-}(this, function ($, nfCommon, nfClusterTable, nfErrorHandler, nfStorage) {
-    'use strict';
+$(document).ready(function () {
+    // initialize the counters page
+    nf.Cluster.init();
+});
 
-    $(document).ready(function () {
-        // initialize the counters page
-        nfCluster.init();
-    });
+nf.Cluster = (function () {
 
     /**
      * Configuration object used to hold a number of configuration items.
@@ -69,8 +44,8 @@
             url: config.urls.currentUser,
             dataType: 'json'
         }).done(function (currentUser) {
-            nfCommon.setCurrentUser(currentUser);
-        }).fail(nfErrorHandler.handleAjaxError);
+            nf.Common.setCurrentUser(currentUser);
+        }).fail(nf.Common.handleAjaxError);
     };
 
     /**
@@ -79,7 +54,7 @@
     var initializeClusterPage = function () {
         // define mouse over event for the refresh button
         $('#refresh-button').click(function () {
-            nfClusterTable.loadClusterTable();
+            nf.ClusterTable.loadClusterTable();
         });
 
         // return a deferred for page initialization
@@ -92,8 +67,8 @@
                     dataType: 'json'
                 }).done(function (bannerResponse) {
                     // ensure the banners response is specified
-                    if (nfCommon.isDefinedAndNotNull(bannerResponse.banners)) {
-                        if (nfCommon.isDefinedAndNotNull(bannerResponse.banners.headerText) && bannerResponse.banners.headerText !== '') {
+                    if (nf.Common.isDefinedAndNotNull(bannerResponse.banners)) {
+                        if (nf.Common.isDefinedAndNotNull(bannerResponse.banners.headerText) && bannerResponse.banners.headerText !== '') {
                             // update the header text
                             var bannerHeader = $('#banner-header').text(bannerResponse.banners.headerText).show();
 
@@ -107,7 +82,7 @@
                             updateTop('counters');
                         }
 
-                        if (nfCommon.isDefinedAndNotNull(bannerResponse.banners.footerText) && bannerResponse.banners.footerText !== '') {
+                        if (nf.Common.isDefinedAndNotNull(bannerResponse.banners.footerText) && bannerResponse.banners.footerText !== '') {
                             // update the footer text and show it
                             var bannerFooter = $('#banner-footer').text(bannerResponse.banners.footerText).show();
 
@@ -123,7 +98,7 @@
 
                     deferred.resolve();
                 }).fail(function (xhr, status, error) {
-                    nfErrorHandler.handleAjaxError(xhr, status, error);
+                    nf.Common.handleAjaxError(xhr, status, error);
                     deferred.reject();
                 });
             } else {
@@ -132,13 +107,13 @@
         }).promise();
     };
 
-    var nfCluster = {
+    return {
         /**
          * Initializes the counters page.
          */
         init: function () {
-            nfStorage.init();
-
+            nf.Storage.init();
+            
             // load the current user
             loadCurrentUser().done(function () {
                 var setBodySize = function () {
@@ -159,13 +134,13 @@
                 setBodySize();
 
                 // create the cluster table
-                nfClusterTable.init();
+                nf.ClusterTable.init();
 
                 // resize to fit
-                nfClusterTable.resetTableSize();
+                nf.ClusterTable.resetTableSize();
 
                 // load the table
-                nfClusterTable.loadClusterTable().done(function () {
+                nf.ClusterTable.loadClusterTable().done(function () {
                     // once the table is initialized, finish initializing the page
                     initializeClusterPage().done(function () {
 
@@ -181,15 +156,15 @@
                             // set the document title and the about title
                             document.title = countersTitle;
                             $('#counters-header-text').text(countersTitle);
-                        }).fail(nfErrorHandler.handleAjaxError);
+                        }).fail(nf.Common.handleAjaxError);
 
                         $(window).on('resize', function (e) {
                             setBodySize();
                             // resize dialogs when appropriate
                             var dialogs = $('.dialog');
                             for (var i = 0, len = dialogs.length; i < len; i++) {
-                                if ($(dialogs[i]).is(':visible')) {
-                                    setTimeout(function (dialog) {
+                                if ($(dialogs[i]).is(':visible')){
+                                    setTimeout(function(dialog){
                                         dialog.modal('resize');
                                     }, 50, $(dialogs[i]));
                                 }
@@ -198,8 +173,8 @@
                             // resize grids when appropriate
                             var gridElements = $('*[class*="slickgrid_"]');
                             for (var j = 0, len = gridElements.length; j < len; j++) {
-                                if ($(gridElements[j]).is(':visible')) {
-                                    setTimeout(function (gridElement) {
+                                if ($(gridElements[j]).is(':visible')){
+                                    setTimeout(function(gridElement){
                                         gridElement.data('gridInstance').resizeCanvas();
                                     }, 50, $(gridElements[j]));
                                 }
@@ -209,12 +184,12 @@
                             var tabsContainers = $('.tab-container');
                             var tabsContents = [];
                             for (var k = 0, len = tabsContainers.length; k < len; k++) {
-                                if ($(tabsContainers[k]).is(':visible')) {
+                                if ($(tabsContainers[k]).is(':visible')){
                                     tabsContents.push($('#' + $(tabsContainers[k]).attr('id') + '-content'));
                                 }
                             }
                             $.each(tabsContents, function (index, tabsContent) {
-                                nfCommon.toggleScrollable(tabsContent.get(0));
+                                nf.Common.toggleScrollable(tabsContent.get(0));
                             });
                         });
                     });
@@ -222,6 +197,4 @@
             });
         }
     };
-
-    return nfCluster;
-}));
+}());

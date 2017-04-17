@@ -18,17 +18,18 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi-framework</artifactId>
-        <version>1.2.0-SNAPSHOT</version>
+        <version>1.1.2</version>
     </parent>
     <artifactId>nifi-resources</artifactId>
     <packaging>pom</packaging>
     <description>holds common resources used to build installers</description>
     <properties>
         <!--Wrapper Properties -->
-        <nifi.jvm.heap.init>512m</nifi.jvm.heap.init>
-        <nifi.jvm.heap.max>512m</nifi.jvm.heap.max>
+        <nifi.jvm.heap.mb>512</nifi.jvm.heap.mb>
+        <nifi.jvm.permgen.mb>128</nifi.jvm.permgen.mb>
         <nifi.run.as />
         <!-- nifi.properties: core properties -->
+        <nifi.version>${project.version}</nifi.version>
         <nifi.flowcontroller.autoResumeState>true</nifi.flowcontroller.autoResumeState>
         <nifi.flowcontroller.graceful.shutdown.period>10 sec</nifi.flowcontroller.graceful.shutdown.period>
         <nifi.flowservice.writedelay.interval>500 ms</nifi.flowservice.writedelay.interval>
@@ -97,7 +98,7 @@
         <nifi.provenance.repository.rollover.time>30 secs</nifi.provenance.repository.rollover.time>
         <nifi.provenance.repository.rollover.size>100 MB</nifi.provenance.repository.rollover.size>
         <nifi.provenance.repository.query.threads>2</nifi.provenance.repository.query.threads>
-        <nifi.provenance.repository.index.threads>2</nifi.provenance.repository.index.threads>
+        <nifi.provenance.repository.index.threads>1</nifi.provenance.repository.index.threads>
         <nifi.provenance.repository.compress.on.rollover>true</nifi.provenance.repository.compress.on.rollover>
         <nifi.provenance.repository.indexed.fields>EventType, FlowFileUUID, Filename, ProcessorID, Relationship</nifi.provenance.repository.indexed.fields>
         <nifi.provenance.repository.indexed.attributes />
@@ -105,8 +106,6 @@
         <nifi.provenance.repository.always.sync>false</nifi.provenance.repository.always.sync>
         <nifi.provenance.repository.journal.count>16</nifi.provenance.repository.journal.count>
         <nifi.provenance.repository.max.attribute.length>65536</nifi.provenance.repository.max.attribute.length>
-        <nifi.provenance.repository.concurrent.merge.threads>2</nifi.provenance.repository.concurrent.merge.threads>
-        <nifi.provenance.repository.warm.cache.frequency>1 hour</nifi.provenance.repository.warm.cache.frequency>
 
         <!-- volatile provenance repository properties -->
         <nifi.provenance.repository.buffer.size>100000</nifi.provenance.repository.buffer.size>
@@ -120,10 +119,8 @@
         <nifi.web.war.directory>./lib</nifi.web.war.directory>
         <nifi.web.http.host />
         <nifi.web.http.port>8080</nifi.web.http.port>
-        <nifi.web.http.network.interface.default />
         <nifi.web.https.host />
         <nifi.web.https.port />
-        <nifi.web.https.network.interface.default />
         <nifi.jetty.work.dir>./work/jetty</nifi.jetty.work.dir>
         <nifi.web.jetty.threads>200</nifi.web.jetty.threads>
 
@@ -173,6 +170,13 @@
         <nifi.kerberos.spnego.principal />
         <nifi.kerberos.spnego.keytab.location />
         <nifi.kerberos.spnego.authentication.expiration>12 hours</nifi.kerberos.spnego.authentication.expiration>
+
+        <!-- nifi.properties: build info -->
+        <nifi.build.tag>${project.scm.tag}</nifi.build.tag>
+        <nifi.build.timestamp>${maven.build.timestamp}</nifi.build.timestamp>
+        <!-- buildRevision and buildBranch provided by buildnumber-maven-plugin or build-info-read-properties profile -->
+        <nifi.build.branch>${buildBranch}</nifi.build.branch>
+        <nifi.build.revision>${buildRevision}</nifi.build.revision>
     </properties>
     <build>
         <plugins>

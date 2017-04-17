@@ -43,18 +43,15 @@ public class ApplicationStartupContextListener implements ServletContextListener
 
     private static final Logger logger = LoggerFactory.getLogger(ApplicationStartupContextListener.class);
 
-    private FlowController flowController = null;
-    private FlowService flowService = null;
-    private RequestReplicator requestReplicator = null;
-
     @Override
     public void contextInitialized(ServletContextEvent sce) {
-        final ApplicationContext ctx = WebApplicationContextUtils.getWebApplicationContext(sce.getServletContext());
-        final NiFiProperties properties = ctx.getBean("nifiProperties", NiFiProperties.class);
+
+        ApplicationContext ctx = WebApplicationContextUtils.getWebApplicationContext(sce.getServletContext());
+        NiFiProperties properties = ctx.getBean("nifiProperties", NiFiProperties.class);
+        FlowService flowService = null;
         try {
             flowService = ctx.getBean("flowService", FlowService.class);
-            flowController = ctx.getBean("flowController", FlowController.class);
-            requestReplicator = ctx.getBean("requestReplicator", RequestReplicator.class);
+            final FlowController flowController = ctx.getBean("flowController", FlowController.class);
 
             // start and load the flow if we're not clustered (clustered flow loading should
             // happen once the application (wars) is fully loaded and initialized). non clustered
@@ -84,7 +81,7 @@ public class ApplicationStartupContextListener implements ServletContextListener
                 logger.info("Flow Controller started successfully.");
             }
         } catch (BeansException | RepositoryPurgeException | IOException e) {
-            shutdown();
+            shutdown(flowService, ctx.getBean("requestReplicator", RequestReplicator.class));
             throw new NiFiCoreException("Unable to start Flow Controller.", e);
         }
 
@@ -93,19 +90,21 @@ public class ApplicationStartupContextListener implements ServletContextListener
             ctx.getBean("loginIdentityProvider", LoginIdentityProvider.class);
             ctx.getBean("authorizer", Authorizer.class);
         } catch (final BeansException e) {
-            shutdown();
+            shutdown(flowService, ctx.getBean("requestReplicator", RequestReplicator.class));
             throw new NiFiCoreException("Unable to start Flow Controller.", e);
         }
     }
 
     @Override
     public void contextDestroyed(ServletContextEvent sce) {
+        ApplicationContext ctx = WebApplicationContextUtils.getWebApplicationContext(sce.getServletContext());
+
         logger.info("Initiating shutdown of flow service...");
-        shutdown();
+        shutdown(ctx.getBean("flowService", FlowService.class), ctx.getBean("requestReplicator", RequestReplicator.class));
         logger.info("Flow service termination completed.");
     }
 
-    private void shutdown() {
+    private void shutdown(final FlowService flowService, final RequestReplicator requestReplicator) {
         try {
             // ensure the flow service is terminated
             if (flowService != null && flowService.isRunning()) {

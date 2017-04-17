@@ -19,7 +19,6 @@ package org.apache.nifi.processors.lumberjack.event;
 /**
  * Metadata keys for Lumberjack.
  */
-@Deprecated
 public interface LumberjackMetadata {
 
     String SEQNUMBER_KEY = "lumberjack.sequencenumber";

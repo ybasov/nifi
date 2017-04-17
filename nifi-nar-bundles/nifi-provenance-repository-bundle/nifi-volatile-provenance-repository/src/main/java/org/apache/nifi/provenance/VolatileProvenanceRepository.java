@@ -124,8 +124,7 @@ public class VolatileProvenanceRepository implements ProvenanceRepository {
     }
 
     @Override
-    public void initialize(final EventReporter eventReporter, final Authorizer authorizer, final ProvenanceAuthorizableFactory resourceFactory,
-        final IdentifierLookup idLookup) throws IOException {
+    public void initialize(final EventReporter eventReporter, final Authorizer authorizer, final ProvenanceAuthorizableFactory resourceFactory) throws IOException {
         if (initialized.getAndSet(true)) {
             return;
         }
@@ -461,14 +460,14 @@ public class VolatileProvenanceRepository implements ProvenanceRepository {
         }
 
         if (user == null) {
-            throw new AccessDeniedException("Cannot retrieve Provenance Query Submission because no user id was provided in the provenance request.");
+            throw new AccessDeniedException("Cannot retrieve Provenance Query Submission because no user id was provided");
         }
 
         if (userId == null || userId.equals(user.getIdentity())) {
             return submission;
         }
 
-        throw new AccessDeniedException("Cannot retrieve Provenance Query Submission because " + user.getIdentity() + " is not the user who submitted the request.");
+        throw new AccessDeniedException("Cannot retrieve Provenance Query Submission because " + user.getIdentity() + " is not the user who submitted the request");
     }
 
     public Lineage computeLineage(final String flowFileUUID, final NiFiUser user) throws IOException {
@@ -521,14 +520,14 @@ public class VolatileProvenanceRepository implements ProvenanceRepository {
         }
 
         if (user == null) {
-            throw new AccessDeniedException("Cannot retrieve Provenance Lineage Submission because no user id was provided in the lineage request.");
+            throw new AccessDeniedException("Cannot retrieve Provenance Query Submission because no user id was provided");
         }
 
         if (userId == null || userId.equals(user.getIdentity())) {
             return submission;
         }
 
-        throw new AccessDeniedException("Cannot retrieve Provenance Lineage Submission because " + user.getIdentity() + " is not the user who submitted the request.");
+        throw new AccessDeniedException("Cannot retrieve Provenance Query Submission because " + user.getIdentity() + " is not the user who submitted the request");
     }
 
     public Lineage expandSpawnEventParents(String identifier) throws IOException {
@@ -543,7 +542,7 @@ public class VolatileProvenanceRepository implements ProvenanceRepository {
         if (event == null) {
             final AsyncLineageSubmission submission = new AsyncLineageSubmission(LineageComputationType.EXPAND_PARENTS, eventId, Collections.<String>emptyList(), 1, userId);
             lineageSubmissionMap.put(submission.getLineageIdentifier(), submission);
-            submission.getResult().update(Collections.<ProvenanceEventRecord> emptyList(), 0L);
+            submission.getResult().update(Collections.<ProvenanceEventRecord>emptyList());
             return submission;
         }
 
@@ -574,7 +573,7 @@ public class VolatileProvenanceRepository implements ProvenanceRepository {
         if (event == null) {
             final AsyncLineageSubmission submission = new AsyncLineageSubmission(LineageComputationType.EXPAND_CHILDREN, eventId, Collections.<String>emptyList(), 1, userId);
             lineageSubmissionMap.put(submission.getLineageIdentifier(), submission);
-            submission.getResult().update(Collections.<ProvenanceEventRecord> emptyList(), 0L);
+            submission.getResult().update(Collections.<ProvenanceEventRecord>emptyList());
             return submission;
         }
 
@@ -682,7 +681,7 @@ public class VolatileProvenanceRepository implements ProvenanceRepository {
         @Override
         public void run() {
             final List<ProvenanceEventRecord> records = ringBuffer.getSelectedElements(filter);
-            submission.getResult().update(records, records.size());
+            submission.getResult().update(records);
         }
     }
 

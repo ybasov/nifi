@@ -23,6 +23,5 @@ public enum LdapAuthenticationStrategy {
 
     ANONYMOUS,
     SIMPLE,
-    LDAPS,
     START_TLS
 }

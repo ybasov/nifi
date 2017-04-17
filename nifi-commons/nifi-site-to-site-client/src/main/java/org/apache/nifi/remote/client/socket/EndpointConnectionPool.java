@@ -23,9 +23,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.channels.SocketChannel;
 import java.security.cert.CertificateException;
@@ -75,6 +73,7 @@ public class EndpointConnectionPool implements PeerStatusProvider {
     private static final Logger logger = LoggerFactory.getLogger(EndpointConnectionPool.class);
 
     private final ConcurrentMap<PeerDescription, BlockingQueue<EndpointConnection>> connectionQueueMap = new ConcurrentHashMap<>();
+    private final URI clusterUrl;
 
     private final Set<EndpointConnection> activeConnections = Collections.synchronizedSet(new HashSet<>());
 
@@ -86,22 +85,22 @@ public class EndpointConnectionPool implements PeerStatusProvider {
 
     private volatile int commsTimeout;
     private volatile boolean shutdown = false;
+    private volatile Set<PeerStatus> lastFetchedQueryablePeers;
 
     private final SiteInfoProvider siteInfoProvider;
     private final PeerSelector peerSelector;
-    private final InetAddress localAddress;
 
-    public EndpointConnectionPool(final RemoteDestination remoteDestination, final int commsTimeoutMillis, final int idleExpirationMillis,
-        final SSLContext sslContext, final EventReporter eventReporter, final File persistenceFile, final SiteInfoProvider siteInfoProvider,
-        final InetAddress localAddress) {
+    public EndpointConnectionPool(final URI clusterUrl, final RemoteDestination remoteDestination, final int commsTimeoutMillis, final int idleExpirationMillis,
+            final SSLContext sslContext, final EventReporter eventReporter, final File persistenceFile, final SiteInfoProvider siteInfoProvider) {
+        Objects.requireNonNull(clusterUrl, "URL cannot be null");
         Objects.requireNonNull(remoteDestination, "Remote Destination/Port Identifier cannot be null");
 
+        this.clusterUrl = clusterUrl;
         this.remoteDestination = remoteDestination;
         this.sslContext = sslContext;
         this.eventReporter = eventReporter;
         this.commsTimeout = commsTimeoutMillis;
         this.idleExpirationMillis = idleExpirationMillis;
-        this.localAddress = localAddress;
 
         this.siteInfoProvider = siteInfoProvider;
 
@@ -157,7 +156,6 @@ public class EndpointConnectionPool implements PeerStatusProvider {
         SocketClientProtocol protocol = null;
         EndpointConnection connection;
         Peer peer = null;
-        URI clusterUrl = siteInfoProvider.getActiveClusterUrl();
 
         do {
             final List<EndpointConnection> addBack = new ArrayList<>();
@@ -363,7 +361,7 @@ public class EndpointConnectionPool implements PeerStatusProvider {
 
     @Override
     public PeerDescription getBootstrapPeerDescription() throws IOException {
-        final String hostname = siteInfoProvider.getActiveClusterUrl().getHost();
+        final String hostname = clusterUrl.getHost();
         final Integer port = siteInfoProvider.getSiteToSitePort();
         if (port == null) {
             throw new IOException("Remote instance of NiFi is not configured to allow RAW Socket site-to-site communications");
@@ -377,7 +375,6 @@ public class EndpointConnectionPool implements PeerStatusProvider {
     public Set<PeerStatus> fetchRemotePeerStatuses(final PeerDescription peerDescription) throws IOException {
         final String hostname = peerDescription.getHostname();
         final int port = peerDescription.getPort();
-        final URI clusterUrl = siteInfoProvider.getActiveClusterUrl();
 
         final PeerDescription clusterPeerDescription = new PeerDescription(hostname, port, clusterUrl.toString().startsWith("https://"));
         final CommunicationsSession commsSession = establishSiteToSiteConnection(hostname, port);
@@ -445,7 +442,7 @@ public class EndpointConnectionPool implements PeerStatusProvider {
                             + " because it requires Secure Site-to-Site communications, but this instance is not configured for secure communications");
                 }
 
-                final SSLSocketChannel socketChannel = new SSLSocketChannel(sslContext, hostname, port, localAddress, true);
+                final SSLSocketChannel socketChannel = new SSLSocketChannel(sslContext, hostname, port, true);
                 socketChannel.connect();
 
                 commsSession = new SSLSocketChannelCommunicationsSession(socketChannel);
@@ -457,11 +454,6 @@ public class EndpointConnectionPool implements PeerStatusProvider {
                 }
             } else {
                 final SocketChannel socketChannel = SocketChannel.open();
-                if (localAddress != null) {
-                    final SocketAddress localSocketAddress = new InetSocketAddress(localAddress, 0);
-                    socketChannel.socket().bind(localSocketAddress);
-                }
-
                 socketChannel.socket().connect(new InetSocketAddress(hostname, port), commsTimeout);
                 socketChannel.socket().setSoTimeout(commsTimeout);
 
@@ -530,7 +522,7 @@ public class EndpointConnectionPool implements PeerStatusProvider {
 
     @Override
     public String toString() {
-        return "EndpointConnectionPool[Cluster URL=" + siteInfoProvider.getClusterUrls() + "]";
+        return "EndpointConnectionPool[Cluster URL=" + clusterUrl + "]";
     }
 
     private class IdEnrichedRemoteDestination implements RemoteDestination {

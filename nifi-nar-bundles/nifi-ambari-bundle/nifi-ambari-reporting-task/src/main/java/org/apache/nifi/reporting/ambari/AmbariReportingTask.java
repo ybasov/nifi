@@ -80,15 +80,6 @@ public class AmbariReportingTask extends AbstractReportingTask {
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
-    static final PropertyDescriptor PROCESS_GROUP_ID = new PropertyDescriptor.Builder()
-            .name("Process Group ID")
-            .description("If specified, the reporting task will send metrics about this process group only. If"
-                    + " not, the root process group is used and global metrics are sent.")
-            .required(false)
-            .expressionLanguageSupported(true)
-            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .build();
-
     private volatile Client client;
     private volatile JsonBuilderFactory factory;
     private volatile VirtualMachineMetrics virtualMachineMetrics;
@@ -102,7 +93,6 @@ public class AmbariReportingTask extends AbstractReportingTask {
         properties.add(METRICS_COLLECTOR_URL);
         properties.add(APPLICATION_ID);
         properties.add(HOSTNAME);
-        properties.add(PROCESS_GROUP_ID);
         return properties;
     }
 
@@ -122,12 +112,12 @@ public class AmbariReportingTask extends AbstractReportingTask {
 
     @Override
     public void onTrigger(final ReportingContext context) {
-        final String metricsCollectorUrl = context.getProperty(METRICS_COLLECTOR_URL).evaluateAttributeExpressions().getValue();
-        final String applicationId = context.getProperty(APPLICATION_ID).evaluateAttributeExpressions().getValue();
-        final String hostname = context.getProperty(HOSTNAME).evaluateAttributeExpressions().getValue();
-
-        final boolean pgIdIsSet = context.getProperty(PROCESS_GROUP_ID).isSet();
-        final String processGroupId = pgIdIsSet ? context.getProperty(PROCESS_GROUP_ID).evaluateAttributeExpressions().getValue() : null;
+        final String metricsCollectorUrl = context.getProperty(METRICS_COLLECTOR_URL)
+                .evaluateAttributeExpressions().getValue();
+        final String applicationId = context.getProperty(APPLICATION_ID)
+                .evaluateAttributeExpressions().getValue();
+        final String hostname = context.getProperty(HOSTNAME)
+                .evaluateAttributeExpressions().getValue();
 
         final long start = System.currentTimeMillis();
 
@@ -150,28 +140,22 @@ public class AmbariReportingTask extends AbstractReportingTask {
         }
 
         // calculate the current metrics, but store them to be sent next time
-        final ProcessGroupStatus status = processGroupId == null ? context.getEventAccess().getControllerStatus() : context.getEventAccess().getGroupStatus(processGroupId);
+        final ProcessGroupStatus status = context.getEventAccess().getControllerStatus();
+        final Map<String,String> statusMetrics = metricsService.getMetrics(status);
+        final Map<String,String> jvmMetrics = metricsService.getMetrics(virtualMachineMetrics);
 
-        if(status != null) {
-            final Map<String,String> statusMetrics = metricsService.getMetrics(status, pgIdIsSet);
-            final Map<String,String> jvmMetrics = metricsService.getMetrics(virtualMachineMetrics);
+        final MetricsBuilder metricsBuilder = new MetricsBuilder(factory);
 
-            final MetricsBuilder metricsBuilder = new MetricsBuilder(factory);
+        final JsonObject metricsObject = metricsBuilder
+                .applicationId(applicationId)
+                .instanceId(status.getId())
+                .hostname(hostname)
+                .timestamp(start)
+                .addAllMetrics(statusMetrics)
+                .addAllMetrics(jvmMetrics)
+                .build();
 
-            final JsonObject metricsObject = metricsBuilder
-                    .applicationId(applicationId)
-                    .instanceId(status.getId())
-                    .hostname(hostname)
-                    .timestamp(start)
-                    .addAllMetrics(statusMetrics)
-                    .addAllMetrics(jvmMetrics)
-                    .build();
-
-            previousMetrics = metricsObject;
-        } else {
-            getLogger().error("No process group status with ID = {}", new Object[]{processGroupId});
-            previousMetrics = null;
-        }
+        previousMetrics = metricsObject;
     }
 
 }

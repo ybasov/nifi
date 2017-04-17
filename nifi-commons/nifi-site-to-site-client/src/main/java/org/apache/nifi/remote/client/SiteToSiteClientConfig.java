@@ -18,8 +18,6 @@ package org.apache.nifi.remote.client;
 
 import java.io.File;
 import java.io.Serializable;
-import java.net.InetAddress;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLContext;
@@ -33,20 +31,8 @@ public interface SiteToSiteClientConfig extends Serializable {
 
     /**
      * @return the configured URL for the remote NiFi instance
-     * @deprecated This method only returns single URL string even if multiple URLs are set
-     * for backward compatibility for implementations that does not expect multiple URLs.
-     * {@link #getUrls()} should be used instead then should support multiple URLs when making requests.
      */
-    @Deprecated
     String getUrl();
-
-    /**
-     * SiteToSite implementations should support multiple URLs when establishing a SiteToSite connection with a remote
-     * NiFi instance to provide robust connectivity so that it can keep working as long as at least one of
-     * the configured URLs is accessible.
-     * @return the configured URLs for the remote NiFi instances.
-     */
-    Set<String> getUrls();
 
     /**
      * @param timeUnit unit over which to report the timeout
@@ -173,9 +159,4 @@ public interface SiteToSiteClientConfig extends Serializable {
      */
     HttpProxy getHttpProxy();
 
-    /**
-     * @return the InetAddress to bind to for the local address when creating a socket, or
-     *         {@code null} to bind to the {@code anyLocal} address.
-     */
-    InetAddress getLocalAddress();
 }

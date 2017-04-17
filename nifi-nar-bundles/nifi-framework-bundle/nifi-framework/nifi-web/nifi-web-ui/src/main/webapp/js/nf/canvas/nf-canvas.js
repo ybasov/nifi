@@ -15,61 +15,94 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'd3',
-                'nf.Common',
-                'nf.Graph',
-                'nf.Shell',
-                'nf.ng.Bridge',
-                'nf.ClusterSummary',
-                'nf.ErrorHandler',
-                'nf.Storage',
-                'nf.CanvasUtils',
-                'nf.Birdseye',
-                'nf.ContextMenu',
-                'nf.Actions',
-                'nf.ProcessGroup'],
-            function ($, d3, nfCommon, nfGraph, nfShell, nfNgBridge, nfClusterSummary, nfErrorHandler, nfStorage, nfCanvasUtils, nfBirdseye, nfContextMenu, nfActions, nfProcessGroup) {
-                return (nf.Canvas = factory($, d3, nfCommon, nfGraph, nfShell, nfNgBridge, nfClusterSummary, nfErrorHandler, nfStorage, nfCanvasUtils, nfBirdseye, nfContextMenu, nfActions, nfProcessGroup));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.Canvas =
-            factory(require('jquery'),
-                require('d3'),
-                require('nf.Common'),
-                require('nf.Graph'),
-                require('nf.Shell'),
-                require('nf.ng.Bridge'),
-                require('nf.ClusterSummary'),
-                require('nf.ErrorHandler'),
-                require('nf.Storage'),
-                require('nf.CanvasUtils'),
-                require('nf.Birdseye'),
-                require('nf.ContextMenu'),
-                require('nf.Actions'),
-                require('nf.ProcessGroup')));
+$(document).ready(function () {
+    if (nf.Canvas.SUPPORTS_SVG) {
+
+        //Create Angular App
+        var app = angular.module('ngCanvasApp', ['ngResource', 'ngRoute', 'ngMaterial', 'ngMessages']);
+
+        //Define Dependency Injection Annotations
+        nf.ng.AppConfig.$inject = ['$mdThemingProvider', '$compileProvider'];
+        nf.ng.AppCtrl.$inject = ['$scope', 'serviceProvider', '$compile', 'headerCtrl', 'graphControlsCtrl'];
+        nf.ng.ServiceProvider.$inject = [];
+        nf.ng.BreadcrumbsCtrl.$inject = ['serviceProvider'];
+        nf.ng.Canvas.HeaderCtrl.$inject = ['serviceProvider', 'toolboxCtrl', 'globalMenuCtrl', 'flowStatusCtrl'];
+        nf.ng.Canvas.FlowStatusCtrl.$inject = ['serviceProvider'];
+        nf.ng.Canvas.GlobalMenuCtrl.$inject = ['serviceProvider'];
+        nf.ng.Canvas.ToolboxCtrl.$inject = ['processorComponent',
+            'inputPortComponent',
+            'outputPortComponent',
+            'groupComponent',
+            'remoteGroupComponent',
+            'funnelComponent',
+            'templateComponent',
+            'labelComponent'];
+        nf.ng.ProcessorComponent.$inject = ['serviceProvider'];
+        nf.ng.InputPortComponent.$inject = ['serviceProvider'];
+        nf.ng.OutputPortComponent.$inject = ['serviceProvider'];
+        nf.ng.GroupComponent.$inject = ['serviceProvider'];
+        nf.ng.RemoteProcessGroupComponent.$inject = ['serviceProvider'];
+        nf.ng.FunnelComponent.$inject = ['serviceProvider'];
+        nf.ng.TemplateComponent.$inject = ['serviceProvider'];
+        nf.ng.LabelComponent.$inject = ['serviceProvider'];
+        nf.ng.Canvas.GraphControlsCtrl.$inject = ['serviceProvider', 'navigateCtrl', 'operateCtrl'];
+        nf.ng.Canvas.NavigateCtrl.$inject = [];
+        nf.ng.Canvas.OperateCtrl.$inject = [];
+        nf.ng.BreadcrumbsDirective.$inject = ['breadcrumbsCtrl'];
+        nf.ng.DraggableDirective.$inject = [];
+
+        //Configure Angular App
+        app.config(nf.ng.AppConfig);
+
+        //Define Angular App Controllers
+        app.controller('ngCanvasAppCtrl', nf.ng.AppCtrl);
+
+        //Define Angular App Services
+        app.service('serviceProvider', nf.ng.ServiceProvider);
+        app.service('breadcrumbsCtrl', nf.ng.BreadcrumbsCtrl);
+        app.service('headerCtrl', nf.ng.Canvas.HeaderCtrl);
+        app.service('globalMenuCtrl', nf.ng.Canvas.GlobalMenuCtrl);
+        app.service('toolboxCtrl', nf.ng.Canvas.ToolboxCtrl);
+        app.service('flowStatusCtrl', nf.ng.Canvas.FlowStatusCtrl);
+        app.service('processorComponent', nf.ng.ProcessorComponent);
+        app.service('inputPortComponent', nf.ng.InputPortComponent);
+        app.service('outputPortComponent', nf.ng.OutputPortComponent);
+        app.service('groupComponent', nf.ng.GroupComponent);
+        app.service('remoteGroupComponent', nf.ng.RemoteProcessGroupComponent);
+        app.service('funnelComponent', nf.ng.FunnelComponent);
+        app.service('templateComponent', nf.ng.TemplateComponent);
+        app.service('labelComponent', nf.ng.LabelComponent);
+        app.service('graphControlsCtrl', nf.ng.Canvas.GraphControlsCtrl);
+        app.service('navigateCtrl', nf.ng.Canvas.NavigateCtrl);
+        app.service('operateCtrl', nf.ng.Canvas.OperateCtrl);
+
+        //Define Angular App Directives
+        app.directive('nfBreadcrumbs', nf.ng.BreadcrumbsDirective);
+        app.directive('nfDraggable', nf.ng.DraggableDirective);
+
+        //Manually Boostrap Angular App
+        nf.ng.Bridge.injector = angular.bootstrap($('body'), ['ngCanvasApp'], { strictDi: true });
+
+        // initialize the NiFi
+        nf.Canvas.init();
+
+        //initialize toolbox components tooltips
+        $('.component-button').qtip($.extend({}, nf.Common.config.tooltipConfig));
     } else {
-        nf.Canvas = factory(root.$,
-            root.d3,
-            root.nf.Common,
-            root.nf.Graph,
-            root.nf.Shell,
-            root.nf.ng.Bridge,
-            root.nf.ClusterSummary,
-            root.nf.ErrorHandler,
-            root.nf.Storage,
-            root.nf.CanvasUtils,
-            root.nf.Birdseye,
-            root.nf.ContextMenu,
-            root.nf.Actions,
-            root.nf.ProcessGroup);
+        $('#message-title').text('Unsupported Browser');
+        $('#message-content').text('Flow graphs are shown using SVG. Please use a browser that supports rendering SVG.');
+
+        // show the error pane
+        $('#message-pane').show();
+
+        // hide the splash screen
+        nf.Canvas.hideSplash();
     }
-}(this, function ($, d3, nfCommon, nfGraph, nfShell, nfNgBridge, nfClusterSummary, nfErrorHandler, nfStorage, nfCanvasUtils, nfBirdseye, nfContextMenu, nfActions, nfProcessGroup) {
-    'use strict';
+});
+
+nf.Canvas = (function () {
 
     var SCALE = 1;
     var TRANSLATE = [0, 0];
@@ -79,11 +112,12 @@
     var MIN_SCALE_TO_RENDER = 0.6;
 
     var polling = false;
-    var allowPageRefresh = false;
     var groupId = 'root';
     var groupName = null;
     var permissions = null;
     var parentGroupId = null;
+    var clustered = false;
+    var connectedToCluster = false;
     var configurableAuthorizer = false;
     var svg = null;
     var canvas = null;
@@ -98,8 +132,22 @@
             controllerBulletins: '../nifi-api/flow/controller/bulletins',
             kerberos: '../nifi-api/access/kerberos',
             revision: '../nifi-api/flow/revision',
-            banners: '../nifi-api/flow/banners'
+            banners: '../nifi-api/flow/banners',
+            flowConfig: '../nifi-api/flow/config',
+            clusterSummary: '../nifi-api/flow/cluster/summary',
+            cluster: '../nifi-api/controller/cluster'
         }
+    };
+
+    /**
+     * Starts polling.
+     *
+     * @argument {int} autoRefreshInterval      The auto refresh interval
+     */
+    var startPolling = function (autoRefreshInterval) {
+        // set polling flag
+        polling = true;
+        poll(autoRefreshInterval);
     };
 
     /**
@@ -111,7 +159,7 @@
         // ensure we're suppose to poll
         if (polling) {
             // reload the status
-            nfCanvas.reload({
+            nf.Canvas.reload({
                 'transition': true
             }).done(function () {
                 // start the wait to poll again
@@ -120,6 +168,493 @@
                 }, autoRefreshInterval * 1000);
             });
         }
+    };
+
+    /**
+     * Initializes the canvas.
+     */
+    var initCanvas = function () {
+        var canvasContainer = $('#canvas-container');
+
+        // create the canvas
+        svg = d3.select('#canvas-container').append('svg')
+            .on('contextmenu', function () {
+                // reset the canvas click flag
+                canvasClicked = false;
+
+                // since the context menu event propagated back to the canvas, clear the selection
+                nf.CanvasUtils.getSelection().classed('selected', false);
+
+                // show the context menu on the canvas
+                nf.ContextMenu.show();
+
+                // prevent default browser behavior
+                d3.event.preventDefault();
+            });
+
+        // create the definitions element
+        var defs = svg.append('defs');
+
+        // create arrow definitions for the various line types
+        defs.selectAll('marker')
+            .data(['normal', 'ghost', 'unauthorized', 'full'])
+            .enter().append('marker')
+            .attr({
+                'id': function (d) {
+                    return d;
+                },
+                'viewBox': '0 0 6 6',
+                'refX': 5,
+                'refY': 3,
+                'markerWidth': 6,
+                'markerHeight': 6,
+                'orient': 'auto',
+                'fill': function (d) {
+                    if (d === 'ghost') {
+                        return '#aaaaaa';
+                    } else if (d === 'unauthorized') {
+                        return '#ba554a';
+                    } else if (d === 'full') {
+                        return '#ba554a';
+                    } else {
+                        return '#000000';
+                    }
+                }
+            })
+            .append('path')
+            .attr('d', 'M2,3 L0,6 L6,3 L0,0 z');
+
+        // filter for drop shadow
+        var componentDropShadowFilter = defs.append('filter')
+            .attr({
+                'id': 'component-drop-shadow',
+                'height': '140%',
+                'y': '-20%'
+            });
+
+        // blur
+        componentDropShadowFilter.append('feGaussianBlur')
+            .attr({
+                'in': 'SourceAlpha',
+                'stdDeviation': 3,
+                'result': 'blur'
+            });
+
+        // offset
+        componentDropShadowFilter.append('feOffset')
+            .attr({
+                'in': 'blur',
+                'dx': 0,
+                'dy': 1,
+                'result': 'offsetBlur'
+            });
+
+        // color/opacity
+        componentDropShadowFilter.append('feFlood')
+            .attr({
+                'flood-color': '#000000',
+                'flood-opacity': 0.4,
+                'result': 'offsetColor'
+            });
+
+        // combine
+        componentDropShadowFilter.append('feComposite')
+            .attr({
+                'in': 'offsetColor',
+                'in2': 'offsetBlur',
+                'operator': 'in',
+                'result': 'offsetColorBlur'
+            });
+
+        // stack the effect under the source graph
+        var componentDropShadowFeMerge = componentDropShadowFilter.append('feMerge');
+        componentDropShadowFeMerge.append('feMergeNode')
+            .attr('in', 'offsetColorBlur');
+        componentDropShadowFeMerge.append('feMergeNode')
+            .attr('in', 'SourceGraphic');
+
+        // filter for drop shadow
+        var connectionFullDropShadowFilter = defs.append('filter')
+            .attr({
+                'id': 'connection-full-drop-shadow',
+                'height': '140%',
+                'y': '-20%'
+            });
+
+        // blur
+        connectionFullDropShadowFilter.append('feGaussianBlur')
+            .attr({
+                'in': 'SourceAlpha',
+                'stdDeviation': 3,
+                'result': 'blur'
+            });
+
+        // offset
+        connectionFullDropShadowFilter.append('feOffset')
+            .attr({
+                'in': 'blur',
+                'dx': 0,
+                'dy': 1,
+                'result': 'offsetBlur'
+            });
+
+        // color/opacity
+        connectionFullDropShadowFilter.append('feFlood')
+            .attr({
+                'flood-color': '#ba554a',
+                'flood-opacity': 1,
+                'result': 'offsetColor'
+            });
+
+        // combine
+        connectionFullDropShadowFilter.append('feComposite')
+            .attr({
+                'in': 'offsetColor',
+                'in2': 'offsetBlur',
+                'operator': 'in',
+                'result': 'offsetColorBlur'
+            });
+
+        // stack the effect under the source graph
+        var connectionFullFeMerge = connectionFullDropShadowFilter.append('feMerge');
+        connectionFullFeMerge.append('feMergeNode')
+            .attr('in', 'offsetColorBlur');
+        connectionFullFeMerge.append('feMergeNode')
+            .attr('in', 'SourceGraphic');
+
+        // create the canvas element
+        canvas = svg.append('g')
+            .attr({
+                'transform': 'translate(' + TRANSLATE + ') scale(' + SCALE + ')',
+                'pointer-events': 'all',
+                'id': 'canvas'
+            });
+
+        // handle canvas events
+        svg.on('mousedown.selection', function () {
+            canvasClicked = true;
+
+            if (d3.event.button !== 0) {
+                // prevent further propagation (to parents and others handlers
+                // on the same element to prevent zoom behavior)
+                d3.event.stopImmediatePropagation();
+                return;
+            }
+
+            // show selection box if shift is held down
+            if (d3.event.shiftKey) {
+                var position = d3.mouse(canvas.node());
+                canvas.append('rect')
+                    .attr('rx', 6)
+                    .attr('ry', 6)
+                    .attr('x', position[0])
+                    .attr('y', position[1])
+                    .attr('class', 'selection')
+                    .attr('width', 0)
+                    .attr('height', 0)
+                    .attr('stroke-width', function () {
+                        return 1 / nf.Canvas.View.scale();
+                    })
+                    .attr('stroke-dasharray', function () {
+                        return 4 / nf.Canvas.View.scale();
+                    })
+                    .datum(position);
+
+                // prevent further propagation (to parents and others handlers
+                // on the same element to prevent zoom behavior)
+                d3.event.stopImmediatePropagation();
+
+                // prevents the browser from changing to a text selection cursor
+                d3.event.preventDefault();
+            }
+        })
+            .on('mousemove.selection', function () {
+                // update selection box if shift is held down
+                if (d3.event.shiftKey) {
+                    // get the selection box
+                    var selectionBox = d3.select('rect.selection');
+                    if (!selectionBox.empty()) {
+                        // get the original position
+                        var originalPosition = selectionBox.datum();
+                        var position = d3.mouse(canvas.node());
+
+                        var d = {};
+                        if (originalPosition[0] < position[0]) {
+                            d.x = originalPosition[0];
+                            d.width = position[0] - originalPosition[0];
+                        } else {
+                            d.x = position[0];
+                            d.width = originalPosition[0] - position[0];
+                        }
+
+                        if (originalPosition[1] < position[1]) {
+                            d.y = originalPosition[1];
+                            d.height = position[1] - originalPosition[1];
+                        } else {
+                            d.y = position[1];
+                            d.height = originalPosition[1] - position[1];
+                        }
+
+                        // update the selection box
+                        selectionBox.attr(d);
+
+                        // prevent further propagation (to parents)
+                        d3.event.stopPropagation();
+                    }
+                }
+            })
+            .on('mouseup.selection', function () {
+                // ensure this originated from clicking the canvas, not a component.
+                // when clicking on a component, the event propagation is stopped so
+                // it never reaches the canvas. we cannot do this however on up events
+                // since the drag events break down
+                if (canvasClicked === false) {
+                    return;
+                }
+
+                // reset the canvas click flag
+                canvasClicked = false;
+
+                // get the selection box
+                var selectionBox = d3.select('rect.selection');
+                if (!selectionBox.empty()) {
+                    var selectionBoundingBox = {
+                        x: parseInt(selectionBox.attr('x'), 10),
+                        y: parseInt(selectionBox.attr('y'), 10),
+                        width: parseInt(selectionBox.attr('width'), 10),
+                        height: parseInt(selectionBox.attr('height'), 10)
+                    };
+
+                    // see if a component should be selected or not
+                    d3.selectAll('g.component').classed('selected', function (d) {
+                        // consider it selected if its already selected or enclosed in the bounding box
+                        return d3.select(this).classed('selected') ||
+                            d.position.x >= selectionBoundingBox.x && (d.position.x + d.dimensions.width) <= (selectionBoundingBox.x + selectionBoundingBox.width) &&
+                            d.position.y >= selectionBoundingBox.y && (d.position.y + d.dimensions.height) <= (selectionBoundingBox.y + selectionBoundingBox.height);
+                    });
+
+                    // see if a connection should be selected or not
+                    d3.selectAll('g.connection').classed('selected', function (d) {
+                        // consider all points
+                        var points = [d.start].concat(d.bends, [d.end]);
+
+                        // determine the bounding box
+                        var x = d3.extent(points, function (pt) {
+                            return pt.x;
+                        });
+                        var y = d3.extent(points, function (pt) {
+                            return pt.y;
+                        });
+
+                        // consider it selected if its already selected or enclosed in the bounding box
+                        return d3.select(this).classed('selected') ||
+                            x[0] >= selectionBoundingBox.x && x[1] <= (selectionBoundingBox.x + selectionBoundingBox.width) &&
+                            y[0] >= selectionBoundingBox.y && y[1] <= (selectionBoundingBox.y + selectionBoundingBox.height);
+                    });
+
+                    // remove the selection box
+                    selectionBox.remove();
+                } else if (panning === false) {
+                    // deselect as necessary if we are not panning
+                    nf.CanvasUtils.getSelection().classed('selected', false);
+                }
+
+                // inform Angular app values have changed
+                nf.ng.Bridge.digest();
+            });
+
+        // define a function for update the graph dimensions
+        var updateGraphSize = function () {
+            // get the location of the bottom of the graph
+            var footer = $('#banner-footer');
+            var bottom = 0;
+            if (footer.is(':visible')) {
+                bottom = footer.height();
+            }
+
+            // calculate size
+            var top = parseInt(canvasContainer.css('top'), 10);
+            var windowHeight = $(window).height();
+            var canvasHeight = (windowHeight - (bottom + top));
+
+            // canvas/svg
+            canvasContainer.css({
+                'height': canvasHeight + 'px',
+                'bottom': bottom + 'px'
+            });
+            svg.attr({
+                'height': canvasContainer.height(),
+                'width': $(window).width()
+            });
+
+            //breadcrumbs
+            nf.ng.Bridge.injector.get('breadcrumbsCtrl').updateBreadcrumbsCss({'bottom': bottom + 'px'});
+
+            // body
+            $('#canvas-body').css({
+                'height': windowHeight + 'px',
+                'width': $(window).width() + 'px'
+            });
+        };
+
+        // define a function for update the flow status dimensions
+        var updateFlowStatusContainerSize = function () {
+            $('#flow-status-container').css({
+                'width': ((($('#nifi-logo').width() + $('#component-container').width())/$(window).width())*100)*2 + '%'
+            });
+        };
+        updateFlowStatusContainerSize();
+
+        // listen for events to go to components
+        $('body').on('GoTo:Component', function (e, item) {
+            nf.CanvasUtils.showComponent(item.parentGroupId, item.id);
+        });
+
+        // listen for events to go to process groups
+        $('body').on('GoTo:ProcessGroup', function (e, item) {
+            nf.CanvasUtils.enterGroup(item.id).done(function () {
+                nf.CanvasUtils.getSelection().classed('selected', false);
+
+                // inform Angular app that values have changed
+                nf.ng.Bridge.digest();
+            });
+        });
+
+        // listen for browser resize events to reset the graph size
+        $(window).on('resize', function (e) {
+            if (e.target === window) {
+                // close the hamburger menu if open
+                if($('.md-menu-backdrop').is(':visible') === true){
+                    $('.md-menu-backdrop').click();
+                }
+
+                updateGraphSize();
+                updateFlowStatusContainerSize();
+
+                // resize shell when appropriate
+                var shell = $('#shell-dialog');
+                if (shell.is(':visible')){
+                    setTimeout(function(shell){
+                        nf.Shell.resizeContent(shell);
+                        if(shell.find('#shell-iframe').is(':visible')) {
+                            nf.Shell.resizeIframe(shell);
+                        }
+                    }, 50, shell);
+                }
+
+                // resize dialogs when appropriate
+                var dialogs = $('.dialog');
+                for (var i = 0, len = dialogs.length; i < len; i++) {
+                    if ($(dialogs[i]).is(':visible')){
+                        setTimeout(function(dialog){
+                            dialog.modal('resize');
+                        }, 50, $(dialogs[i]));
+                    }
+                }
+
+                // resize grids when appropriate
+                var gridElements = $('*[class*="slickgrid_"]');
+                for (var j = 0, len = gridElements.length; j < len; j++) {
+                    if ($(gridElements[j]).is(':visible')){
+                        setTimeout(function(gridElement){
+                            gridElement.data('gridInstance').resizeCanvas();
+                        }, 50, $(gridElements[j]));
+                    }
+                }
+
+                // toggle tabs .scrollable when appropriate
+                var tabsContainers = $('.tab-container');
+                var tabsContents = [];
+                for (var k = 0, len = tabsContainers.length; k < len; k++) {
+                    if ($(tabsContainers[k]).is(':visible')){
+                        tabsContents.push($('#' + $(tabsContainers[k]).attr('id') + '-content'));
+                    }
+                }
+                $.each(tabsContents, function (index, tabsContent) {
+                    nf.Common.toggleScrollable(tabsContent.get(0));
+                });
+            }
+        }).on('keydown', function (evt) {
+            // if a dialog is open, disable canvas shortcuts
+            if ($('.dialog').is(':visible') || $('#search-field').is(':focus')) {
+                return;
+            }
+
+            // get the current selection
+            var selection = nf.CanvasUtils.getSelection();
+
+            // handle shortcuts
+            var isCtrl = evt.ctrlKey || evt.metaKey;
+            if (isCtrl) {
+                if (evt.keyCode === 82) {
+                    // ctrl-r
+                    nf.Actions.reload();
+
+                    // default prevented in nf-universal-capture.js
+                } else if (evt.keyCode === 65) {
+                    // ctrl-a
+                    nf.Actions.selectAll();
+                    nf.ng.Bridge.digest();
+
+                    // only want to prevent default if the action was performed, otherwise default select all would be overridden
+                    evt.preventDefault();
+                } else if (evt.keyCode === 67) {
+                    // ctrl-c
+                    if (nf.Canvas.canWrite() && nf.CanvasUtils.isCopyable(selection)) {
+                        nf.Actions.copy(selection);
+                    }
+                } else if (evt.keyCode === 86) {
+                    // ctrl-v
+                    if (nf.Canvas.canWrite() && nf.CanvasUtils.isPastable()) {
+                        nf.Actions.paste(selection);
+
+                        // only want to prevent default if the action was performed, otherwise default paste would be overridden
+                        evt.preventDefault();
+                    }
+                }
+            } else {
+                if (evt.keyCode === 8 || evt.keyCode === 46) {
+                    // backspace or delete
+                    if (nf.Canvas.canWrite() && nf.CanvasUtils.areDeletable(selection)) {
+                        nf.Actions['delete'](selection);
+                    }
+
+                    // default prevented in nf-universal-capture.js
+                }
+            }
+        });
+
+        // get the banners and update the page accordingly
+        $.ajax({
+            type: 'GET',
+            url: config.urls.banners,
+            dataType: 'json'
+        }).done(function (response) {
+            // ensure the banners response is specified
+            if (nf.Common.isDefinedAndNotNull(response.banners)) {
+                if (nf.Common.isDefinedAndNotNull(response.banners.headerText) && response.banners.headerText !== '') {
+                    // update the header text and show it
+                    $('#banner-header').addClass('banner-header-background').text(response.banners.headerText).show();
+                    $('#canvas-container').css('top', '98px');
+                }
+
+                if (nf.Common.isDefinedAndNotNull(response.banners.footerText) && response.banners.footerText !== '') {
+                    // update the footer text and show it
+                    var bannerFooter = $('#banner-footer').text(response.banners.footerText).show();
+
+                    var updateBottom = function (elementId) {
+                        var element = $('#' + elementId);
+                        element.css('bottom', parseInt(bannerFooter.css('height'), 10) + 'px');
+                    };
+
+                    // update the position of elements affected by bottom banners
+                    updateBottom('graph');
+                }
+            }
+
+            // update the graph dimensions
+            updateGraphSize();
+        }).fail(nf.Common.handleAjaxError);
     };
 
     /**
@@ -141,48 +676,46 @@
             var processGroupFlow = flowResponse.processGroupFlow;
 
             // set the group details
-            nfCanvas.setGroupId(processGroupFlow.id);
+            nf.Canvas.setGroupId(processGroupFlow.id);
 
             // get the current group name from the breadcrumb
             var breadcrumb = processGroupFlow.breadcrumb;
             if (breadcrumb.permissions.canRead) {
-                nfCanvas.setGroupName(breadcrumb.breadcrumb.name);
+                nf.Canvas.setGroupName(breadcrumb.breadcrumb.name);
             } else {
-                nfCanvas.setGroupName(breadcrumb.id);
+                nf.Canvas.setGroupName(breadcrumb.id);
             }
 
             // update the access policies
             permissions = flowResponse.permissions;
-
+            
             // update the breadcrumbs
-            nfNgBridge.injector.get('breadcrumbsCtrl').resetBreadcrumbs();
-            // inform Angular app values have changed
-            nfNgBridge.digest();
-            nfNgBridge.injector.get('breadcrumbsCtrl').generateBreadcrumbs(breadcrumb);
-            nfNgBridge.injector.get('breadcrumbsCtrl').resetScrollPosition();
+            nf.ng.Bridge.injector.get('breadcrumbsCtrl').resetBreadcrumbs();
+            nf.ng.Bridge.injector.get('breadcrumbsCtrl').generateBreadcrumbs(breadcrumb);
+            nf.ng.Bridge.injector.get('breadcrumbsCtrl').resetScrollPosition();
 
             // update the timestamp
             $('#stats-last-refreshed').text(processGroupFlow.lastRefreshed);
 
             // set the parent id if applicable
-            if (nfCommon.isDefinedAndNotNull(processGroupFlow.parentGroupId)) {
-                nfCanvas.setParentGroupId(processGroupFlow.parentGroupId);
+            if (nf.Common.isDefinedAndNotNull(processGroupFlow.parentGroupId)) {
+                nf.Canvas.setParentGroupId(processGroupFlow.parentGroupId);
             } else {
-                nfCanvas.setParentGroupId(null);
+                nf.Canvas.setParentGroupId(null);
             }
 
             // refresh the graph
-            nfGraph.expireCaches(now);
-            nfGraph.set(processGroupFlow.flow, $.extend({
+            nf.Graph.expireCaches(now);
+            nf.Graph.set(processGroupFlow.flow, $.extend({
                 'selectAll': false
             }, options));
 
             // update component visibility
-            nfCanvas.View.updateVisibility();
+            nf.Canvas.View.updateVisibility();
 
             // update the birdseye
-            nfBirdseye.refresh();
-        }).fail(nfErrorHandler.handleAjaxError);
+            nf.Birdseye.refresh();
+        }).fail(nf.Common.handleAjaxError);
     };
 
     /**
@@ -198,11 +731,24 @@
             dataType: 'json'
         }).done(function (currentUser) {
             // set the current user
-            nfCommon.setCurrentUser(currentUser);
+            nf.Common.setCurrentUser(currentUser);
         });
     };
 
-    var nfCanvas = {
+    /**
+     * Loads the flow configuration and updated the cluster state.
+     *
+     * @returns xhr
+     */
+    var loadClusterSummary = function () {
+        return $.ajax({
+            type: 'GET',
+            url: config.urls.clusterSummary,
+            dataType: 'json'
+        });
+    };
+
+    return {
         CANVAS_OFFSET: 0,
 
         /**
@@ -226,40 +772,37 @@
         },
 
         /**
-         * Disable the canvas refresh hot key.
-         */
-        disableRefreshHotKey: function () {
-            allowPageRefresh = true;
-        },
-
-        /**
          * Reloads the flow from the server based on the currently specified group id.
-         * To load another group, update nfCanvas.setGroupId, clear the canvas, and call nfCanvas.reload.
+         * To load another group, update nf.Canvas.setGroupId, clear the canvas, and call nf.Canvas.reload.
          */
         reload: function (options) {
             return $.Deferred(function (deferred) {
                 // issue the requests
-                var processGroupXhr = reloadProcessGroup(nfCanvas.getGroupId(), options);
-                var statusXhr = nfNgBridge.injector.get('flowStatusCtrl').reloadFlowStatus();
+                var processGroupXhr = reloadProcessGroup(nf.Canvas.getGroupId(), options);
+                var statusXhr = nf.ng.Bridge.injector.get('flowStatusCtrl').reloadFlowStatus();
                 var currentUserXhr = loadCurrentUser();
                 var controllerBulletins = $.ajax({
                     type: 'GET',
                     url: config.urls.controllerBulletins,
                     dataType: 'json'
                 }).done(function (response) {
-                    nfNgBridge.injector.get('flowStatusCtrl').updateBulletins(response);
+                    nf.ng.Bridge.injector.get('flowStatusCtrl').updateBulletins(response);
                 });
-                var clusterSummary = nfClusterSummary.loadClusterSummary().done(function (response) {
+                var clusterSummary = loadClusterSummary().done(function (response) {
                     var clusterSummary = response.clusterSummary;
 
                     // update the cluster summary
-                    nfNgBridge.injector.get('flowStatusCtrl').updateClusterSummary(clusterSummary);
+                    nf.ng.Bridge.injector.get('flowStatusCtrl').updateClusterSummary(clusterSummary);
+
+                    // update the clustered flag
+                    clustered = clusterSummary.clustered;
+                    connectedToCluster = clusterSummary.connectedToCluster;
                 });
 
                 // wait for all requests to complete
                 $.when(processGroupXhr, statusXhr, currentUserXhr, controllerBulletins, clusterSummary).done(function (processGroupResult) {
                     // inform Angular app values have changed
-                    nfNgBridge.digest();
+                    nf.ng.Bridge.digest();
 
                     // resolve the deferred
                     deferred.resolve(processGroupResult);
@@ -270,507 +813,23 @@
         },
 
         /**
-         * Initializes the canvas.
+         * Shows a message when disconnected from the cluster.
          */
-        initCanvas: function () {
-            var canvasContainer = $('#canvas-container');
-
-            // create the canvas
-            svg = d3.select('#canvas-container').append('svg')
-                .on('contextmenu', function () {
-                    // reset the canvas click flag
-                    canvasClicked = false;
-
-                    // since the context menu event propagated back to the canvas, clear the selection
-                    nfCanvasUtils.getSelection().classed('selected', false);
-
-                    // update URL deep linking params
-                    nfCanvasUtils.setURLParameters();
-
-                    // show the context menu on the canvas
-                    nfContextMenu.show();
-
-                    // prevent default browser behavior
-                    d3.event.preventDefault();
-                });
-
-            // create the definitions element
-            var defs = svg.append('defs');
-
-            // create arrow definitions for the various line types
-            defs.selectAll('marker')
-                .data(['normal', 'ghost', 'unauthorized', 'full'])
-                .enter().append('marker')
-                .attr({
-                    'id': function (d) {
-                        return d;
-                    },
-                    'viewBox': '0 0 6 6',
-                    'refX': 5,
-                    'refY': 3,
-                    'markerWidth': 6,
-                    'markerHeight': 6,
-                    'orient': 'auto',
-                    'fill': function (d) {
-                        if (d === 'ghost') {
-                            return '#aaaaaa';
-                        } else if (d === 'unauthorized') {
-                            return '#ba554a';
-                        } else if (d === 'full') {
-                            return '#ba554a';
-                        } else {
-                            return '#000000';
-                        }
-                    }
-                })
-                .append('path')
-                .attr('d', 'M2,3 L0,6 L6,3 L0,0 z');
-
-            // filter for drop shadow
-            var componentDropShadowFilter = defs.append('filter')
-                .attr({
-                    'id': 'component-drop-shadow',
-                    'height': '140%',
-                    'y': '-20%'
-                });
-
-            // blur
-            componentDropShadowFilter.append('feGaussianBlur')
-                .attr({
-                    'in': 'SourceAlpha',
-                    'stdDeviation': 3,
-                    'result': 'blur'
-                });
-
-            // offset
-            componentDropShadowFilter.append('feOffset')
-                .attr({
-                    'in': 'blur',
-                    'dx': 0,
-                    'dy': 1,
-                    'result': 'offsetBlur'
-                });
-
-            // color/opacity
-            componentDropShadowFilter.append('feFlood')
-                .attr({
-                    'flood-color': '#000000',
-                    'flood-opacity': 0.4,
-                    'result': 'offsetColor'
-                });
-
-            // combine
-            componentDropShadowFilter.append('feComposite')
-                .attr({
-                    'in': 'offsetColor',
-                    'in2': 'offsetBlur',
-                    'operator': 'in',
-                    'result': 'offsetColorBlur'
-                });
-
-            // stack the effect under the source graph
-            var componentDropShadowFeMerge = componentDropShadowFilter.append('feMerge');
-            componentDropShadowFeMerge.append('feMergeNode')
-                .attr('in', 'offsetColorBlur');
-            componentDropShadowFeMerge.append('feMergeNode')
-                .attr('in', 'SourceGraphic');
-
-            // filter for drop shadow
-            var connectionFullDropShadowFilter = defs.append('filter')
-                .attr({
-                    'id': 'connection-full-drop-shadow',
-                    'height': '140%',
-                    'y': '-20%'
-                });
-
-            // blur
-            connectionFullDropShadowFilter.append('feGaussianBlur')
-                .attr({
-                    'in': 'SourceAlpha',
-                    'stdDeviation': 3,
-                    'result': 'blur'
-                });
-
-            // offset
-            connectionFullDropShadowFilter.append('feOffset')
-                .attr({
-                    'in': 'blur',
-                    'dx': 0,
-                    'dy': 1,
-                    'result': 'offsetBlur'
-                });
-
-            // color/opacity
-            connectionFullDropShadowFilter.append('feFlood')
-                .attr({
-                    'flood-color': '#ba554a',
-                    'flood-opacity': 1,
-                    'result': 'offsetColor'
-                });
-
-            // combine
-            connectionFullDropShadowFilter.append('feComposite')
-                .attr({
-                    'in': 'offsetColor',
-                    'in2': 'offsetBlur',
-                    'operator': 'in',
-                    'result': 'offsetColorBlur'
-                });
-
-            // stack the effect under the source graph
-            var connectionFullFeMerge = connectionFullDropShadowFilter.append('feMerge');
-            connectionFullFeMerge.append('feMergeNode')
-                .attr('in', 'offsetColorBlur');
-            connectionFullFeMerge.append('feMergeNode')
-                .attr('in', 'SourceGraphic');
-
-            // create the canvas element
-            canvas = svg.append('g')
-                .attr({
-                    'transform': 'translate(' + TRANSLATE + ') scale(' + SCALE + ')',
-                    'pointer-events': 'all',
-                    'id': 'canvas'
-                });
-
-            // handle canvas events
-            svg.on('mousedown.selection', function () {
-                canvasClicked = true;
-
-                if (d3.event.button !== 0) {
-                    // prevent further propagation (to parents and others handlers
-                    // on the same element to prevent zoom behavior)
-                    d3.event.stopImmediatePropagation();
-                    return;
-                }
-
-                // show selection box if shift is held down
-                if (d3.event.shiftKey) {
-                    var position = d3.mouse(canvas.node());
-                    canvas.append('rect')
-                        .attr('rx', 6)
-                        .attr('ry', 6)
-                        .attr('x', position[0])
-                        .attr('y', position[1])
-                        .attr('class', 'selection')
-                        .attr('width', 0)
-                        .attr('height', 0)
-                        .attr('stroke-width', function () {
-                            return 1 / nfCanvas.View.scale();
-                        })
-                        .attr('stroke-dasharray', function () {
-                            return 4 / nfCanvas.View.scale();
-                        })
-                        .datum(position);
-
-                    // prevent further propagation (to parents and others handlers
-                    // on the same element to prevent zoom behavior)
-                    d3.event.stopImmediatePropagation();
-
-                    // prevents the browser from changing to a text selection cursor
-                    d3.event.preventDefault();
-                }
-            })
-                .on('mousemove.selection', function () {
-                    // update selection box if shift is held down
-                    if (d3.event.shiftKey) {
-                        // get the selection box
-                        var selectionBox = d3.select('rect.selection');
-                        if (!selectionBox.empty()) {
-                            // get the original position
-                            var originalPosition = selectionBox.datum();
-                            var position = d3.mouse(canvas.node());
-
-                            var d = {};
-                            if (originalPosition[0] < position[0]) {
-                                d.x = originalPosition[0];
-                                d.width = position[0] - originalPosition[0];
-                            } else {
-                                d.x = position[0];
-                                d.width = originalPosition[0] - position[0];
-                            }
-
-                            if (originalPosition[1] < position[1]) {
-                                d.y = originalPosition[1];
-                                d.height = position[1] - originalPosition[1];
-                            } else {
-                                d.y = position[1];
-                                d.height = originalPosition[1] - position[1];
-                            }
-
-                            // update the selection box
-                            selectionBox.attr(d);
-
-                            // prevent further propagation (to parents)
-                            d3.event.stopPropagation();
-                        }
-                    }
-                })
-                .on('mouseup.selection', function () {
-                    // ensure this originated from clicking the canvas, not a component.
-                    // when clicking on a component, the event propagation is stopped so
-                    // it never reaches the canvas. we cannot do this however on up events
-                    // since the drag events break down
-                    if (canvasClicked === false) {
-                        return;
-                    }
-
-                    // reset the canvas click flag
-                    canvasClicked = false;
-
-                    // get the selection box
-                    var selectionBox = d3.select('rect.selection');
-                    if (!selectionBox.empty()) {
-                        var selectionBoundingBox = {
-                            x: parseInt(selectionBox.attr('x'), 10),
-                            y: parseInt(selectionBox.attr('y'), 10),
-                            width: parseInt(selectionBox.attr('width'), 10),
-                            height: parseInt(selectionBox.attr('height'), 10)
-                        };
-
-                        // see if a component should be selected or not
-                        d3.selectAll('g.component').classed('selected', function (d) {
-                            // consider it selected if its already selected or enclosed in the bounding box
-                            return d3.select(this).classed('selected') ||
-                                d.position.x >= selectionBoundingBox.x && (d.position.x + d.dimensions.width) <= (selectionBoundingBox.x + selectionBoundingBox.width) &&
-                                d.position.y >= selectionBoundingBox.y && (d.position.y + d.dimensions.height) <= (selectionBoundingBox.y + selectionBoundingBox.height);
-                        });
-
-                        // see if a connection should be selected or not
-                        d3.selectAll('g.connection').classed('selected', function (d) {
-                            // consider all points
-                            var points = [d.start].concat(d.bends, [d.end]);
-
-                            // determine the bounding box
-                            var x = d3.extent(points, function (pt) {
-                                return pt.x;
-                            });
-                            var y = d3.extent(points, function (pt) {
-                                return pt.y;
-                            });
-
-                            // consider it selected if its already selected or enclosed in the bounding box
-                            return d3.select(this).classed('selected') ||
-                                x[0] >= selectionBoundingBox.x && x[1] <= (selectionBoundingBox.x + selectionBoundingBox.width) &&
-                                y[0] >= selectionBoundingBox.y && y[1] <= (selectionBoundingBox.y + selectionBoundingBox.height);
-                        });
-
-                        // remove the selection box
-                        selectionBox.remove();
-
-                        // update URL deep linking params
-                        nfCanvasUtils.setURLParameters();
-                    } else if (panning === false) {
-                        // deselect as necessary if we are not panning
-                        nfCanvasUtils.getSelection().classed('selected', false);
-
-                        // update URL deep linking params
-                        nfCanvasUtils.setURLParameters();
-                    }
-
-                    // inform Angular app values have changed
-                    nfNgBridge.digest();
-                });
-
-            // define a function for update the graph dimensions
-            var updateGraphSize = function () {
-                // get the location of the bottom of the graph
-                var footer = $('#banner-footer');
-                var bottom = 0;
-                if (footer.is(':visible')) {
-                    bottom = footer.height();
-                }
-
-                // calculate size
-                var top = parseInt(canvasContainer.css('top'), 10);
-                var windowHeight = $(window).height();
-                var canvasHeight = (windowHeight - (bottom + top));
-
-                // canvas/svg
-                canvasContainer.css({
-                    'height': canvasHeight + 'px',
-                    'bottom': bottom + 'px'
-                });
-                svg.attr({
-                    'height': canvasContainer.height(),
-                    'width': $(window).width()
-                });
-
-                //breadcrumbs
-                nfNgBridge.injector.get('breadcrumbsCtrl').updateBreadcrumbsCss({'bottom': bottom + 'px'});
-
-                // body
-                $('#canvas-body').css({
-                    'height': windowHeight + 'px',
-                    'width': $(window).width() + 'px'
-                });
-            };
-
-            // define a function for update the flow status dimensions
-            var updateFlowStatusContainerSize = function () {
-                $('#flow-status-container').css({
-                    'width': ((($('#nifi-logo').width() + $('#component-container').width())/$(window).width())*100)*2 + '%'
-                });
-            };
-            updateFlowStatusContainerSize();
-
-            // listen for events to go to components
-            $('body').on('GoTo:Component', function (e, item) {
-                nfCanvasUtils.showComponent(item.parentGroupId, item.id);
+        showDisconnectedFromClusterMessage: function () {
+            nf.Dialog.showOkDialog({
+                headerText: 'Cluster Connection',
+                dialogContent: 'This node is currently not connected to the cluster. Any modifications to the data flow made here will not replicate across the cluster.'
             });
+        },
 
-            // listen for events to go to process groups
-            $('body').on('GoTo:ProcessGroup', function (e, item) {
-                nfProcessGroup.enterGroup(item.id).done(function () {
-                    nfCanvasUtils.getSelection().classed('selected', false);
-
-                    // inform Angular app that values have changed
-                    nfNgBridge.digest();
-                });
+        /**
+         * Shows a message when connected to the cluster.
+         */
+        showConnectedToClusterMessage: function () {
+            nf.Dialog.showOkDialog({
+                headerText: 'Cluster Connection',
+                dialogContent: 'This node just joined the cluster. Any modifications to the data flow made here will replicate across the cluster.'
             });
-
-            // listen for browser resize events to reset the graph size
-            $(window).on('resize', function (e) {
-                if (e.target === window) {
-                    // close the hamburger menu if open
-                    if($('.md-menu-backdrop').is(':visible') === true){
-                        $('.md-menu-backdrop').click();
-                    }
-
-                    updateGraphSize();
-                    updateFlowStatusContainerSize();
-
-                    // resize shell when appropriate
-                    var shell = $('#shell-dialog');
-                    if (shell.is(':visible')){
-                        setTimeout(function(shell){
-                            nfShell.resizeContent(shell);
-                            if(shell.find('#shell-iframe').is(':visible')) {
-                                nfShell.resizeIframe(shell);
-                            }
-                        }, 50, shell);
-                    }
-
-                    // resize dialogs when appropriate
-                    var dialogs = $('.dialog');
-                    for (var i = 0, len = dialogs.length; i < len; i++) {
-                        if ($(dialogs[i]).is(':visible')){
-                            setTimeout(function(dialog){
-                                dialog.modal('resize');
-                            }, 50, $(dialogs[i]));
-                        }
-                    }
-
-                    // resize grids when appropriate
-                    var gridElements = $('*[class*="slickgrid_"]');
-                    for (var j = 0, len = gridElements.length; j < len; j++) {
-                        if ($(gridElements[j]).is(':visible')){
-                            setTimeout(function(gridElement){
-                                gridElement.data('gridInstance').resizeCanvas();
-                            }, 50, $(gridElements[j]));
-                        }
-                    }
-
-                    // toggle tabs .scrollable when appropriate
-                    var tabsContainers = $('.tab-container');
-                    var tabsContents = [];
-                    for (var k = 0, len = tabsContainers.length; k < len; k++) {
-                        if ($(tabsContainers[k]).is(':visible')){
-                            tabsContents.push($('#' + $(tabsContainers[k]).attr('id') + '-content'));
-                        }
-                    }
-                    $.each(tabsContents, function (index, tabsContent) {
-                        nfCommon.toggleScrollable(tabsContent.get(0));
-                    });
-                }
-            }).on('keydown', function (evt) {
-                // if a dialog is open, disable canvas shortcuts
-                if ($('.dialog').is(':visible') || $('#search-field').is(':focus')) {
-                    return;
-                }
-
-                // get the current selection
-                var selection = nfCanvasUtils.getSelection();
-
-                // handle shortcuts
-                var isCtrl = evt.ctrlKey || evt.metaKey;
-                if (isCtrl) {
-                    if (evt.keyCode === 82) {
-                        if (allowPageRefresh === true) {
-                            location.reload();
-                            return;
-                        }
-                        // ctrl-r
-                        nfActions.reload();
-
-                        // default prevented in nf-universal-capture.js
-                    } else if (evt.keyCode === 65) {
-                        // ctrl-a
-                        nfActions.selectAll();
-
-                        // update URL deep linking params
-                        nfCanvasUtils.setURLParameters();
-
-                        nfNgBridge.digest();
-
-                        // only want to prevent default if the action was performed, otherwise default select all would be overridden
-                        evt.preventDefault();
-                    } else if (evt.keyCode === 67) {
-                        // ctrl-c
-                        if (nfCanvas.canWrite() && nfCanvasUtils.isCopyable(selection)) {
-                            nfActions.copy(selection);
-                        }
-                    } else if (evt.keyCode === 86) {
-                        // ctrl-v
-                        if (nfCanvas.canWrite() && nfCanvasUtils.isPastable()) {
-                            nfActions.paste(selection);
-
-                            // only want to prevent default if the action was performed, otherwise default paste would be overridden
-                            evt.preventDefault();
-                        }
-                    }
-                } else {
-                    if (evt.keyCode === 8 || evt.keyCode === 46) {
-                        // backspace or delete
-                        if (nfCanvas.canWrite() && nfCanvasUtils.areDeletable(selection)) {
-                            nfActions['delete'](selection);
-                        }
-
-                        // default prevented in nf-universal-capture.js
-                    }
-                }
-            });
-
-            // get the banners and update the page accordingly
-            $.ajax({
-                type: 'GET',
-                url: config.urls.banners,
-                dataType: 'json'
-            }).done(function (response) {
-                // ensure the banners response is specified
-                if (nfCommon.isDefinedAndNotNull(response.banners)) {
-                    if (nfCommon.isDefinedAndNotNull(response.banners.headerText) && response.banners.headerText !== '') {
-                        // update the header text and show it
-                        $('#banner-header').addClass('banner-header-background').text(response.banners.headerText).show();
-                        $('#canvas-container').css('top', '98px');
-                    }
-
-                    if (nfCommon.isDefinedAndNotNull(response.banners.footerText) && response.banners.footerText !== '') {
-                        // update the footer text and show it
-                        var bannerFooter = $('#banner-footer').text(response.banners.footerText).show();
-
-                        var updateBottom = function (elementId) {
-                            var element = $('#' + elementId);
-                            element.css('bottom', parseInt(bannerFooter.css('height'), 10) + 'px');
-                        };
-
-                        // update the position of elements affected by bottom banners
-                        updateBottom('graph');
-                    }
-                }
-
-                // update the graph dimensions
-                updateGraphSize();
-            }).fail(nfErrorHandler.handleAjaxError);
         },
 
         /**
@@ -779,7 +838,7 @@
         init: function () {
             // attempt kerberos authentication
             var ticketExchange = $.Deferred(function (deferred) {
-                if (nfStorage.hasItem('jwt')) {
+                if (nf.Storage.hasItem('jwt')) {
                     deferred.resolve();
                 } else {
                     $.ajax({
@@ -788,9 +847,9 @@
                         dataType: 'text'
                     }).done(function (jwt) {
                         // get the payload and store the token with the appropriate expiration
-                        var token = nfCommon.getJwtPayload(jwt);
-                        var expiration = parseInt(token['exp'], 10) * nfCommon.MILLIS_PER_SECOND;
-                        nfStorage.setItem('jwt', jwt, expiration);
+                        var token = nf.Common.getJwtPayload(jwt);
+                        var expiration = parseInt(token['exp'], 10) * nf.Common.MILLIS_PER_SECOND;
+                        nf.Storage.setItem('jwt', jwt, expiration);
                         deferred.resolve();
                     }).fail(function () {
                         deferred.reject();
@@ -799,7 +858,7 @@
             }).promise();
 
             // load the current user
-            return $.Deferred(function (deferred) {
+            var userXhr = $.Deferred(function (deferred) {
                 ticketExchange.always(function () {
                     loadCurrentUser().done(function (currentUser) {
                         // if the user is logged, we want to determine if they were logged in using a certificate
@@ -808,12 +867,12 @@
                             $('#current-user').text(currentUser.identity).show();
 
                             // render the logout button if there is a token locally
-                            if (nfStorage.getItem('jwt') !== null) {
+                            if (nf.Storage.getItem('jwt') !== null) {
                                 $('#logout-link-container').show();
                             }
                         } else {
                             // set the anonymous user label
-                            nfCommon.setAnonymousUserLabel();
+                            nf.Common.setAnonymousUserLabel();
                         }
                         deferred.resolve();
                     }).fail(function (xhr, status, error) {
@@ -826,6 +885,126 @@
                     });
                 });
             }).promise();
+            
+            userXhr.done(function () {
+                // load the client id
+                var clientXhr = nf.Client.init();
+
+                // get the controller config to register the status poller
+                var configXhr = $.ajax({
+                    type: 'GET',
+                    url: config.urls.flowConfig,
+                    dataType: 'json'
+                });
+
+                // get the initial cluster summary
+                var clusterSummary = loadClusterSummary();
+
+                // ensure the config requests are loaded
+                $.when(configXhr, clusterSummary, userXhr, clientXhr).done(function (configResult, clusterSummaryResult) {
+                    var configResponse = configResult[0];
+                    var clusterSummaryResponse = clusterSummaryResult[0];
+
+                    // calculate the canvas offset
+                    var canvasContainer = $('#canvas-container');
+                    nf.Canvas.CANVAS_OFFSET = canvasContainer.offset().top;
+
+                    // get the config details
+                    var configDetails = configResponse.flowConfiguration;
+                    var clusterSummary = clusterSummaryResponse.clusterSummary;
+
+                    // show disconnected message on load if necessary
+                    if (clusterSummary.clustered && !clusterSummary.connectedToCluster) {
+                        nf.Canvas.showDisconnectedFromClusterMessage();
+                    }
+
+                    // establish the initial cluster state
+                    clustered = clusterSummary.clustered;
+                    connectedToCluster = clusterSummary.connectedToCluster;
+
+                    // update the cluster summary
+                    nf.ng.Bridge.injector.get('flowStatusCtrl').updateClusterSummary(clusterSummary);
+
+                    // get the auto refresh interval
+                    var autoRefreshIntervalSeconds = parseInt(configDetails.autoRefreshIntervalSeconds, 10);
+
+                    // record whether we can configure the authorizer
+                    configurableAuthorizer = configDetails.supportsConfigurableAuthorizer;
+
+                    // init storage
+                    nf.Storage.init();
+
+                    // initialize the application
+                    initCanvas();
+                    nf.Canvas.View.init();
+                    nf.ContextMenu.init();
+                    nf.ng.Bridge.injector.get('headerCtrl').init();
+                    nf.Settings.init();
+                    nf.Actions.init();
+                    nf.QueueListing.init();
+                    nf.ComponentState.init();
+
+                    // initialize the component behaviors
+                    nf.Draggable.init();
+                    nf.Selectable.init();
+                    nf.Connectable.init();
+
+                    // initialize the chart
+                    nf.StatusHistory.init(configDetails.timeOffset);
+
+                    // initialize the birdseye
+                    nf.Birdseye.init();
+
+                    // initialize components
+                    nf.ConnectionConfiguration.init();
+                    nf.ControllerService.init();
+                    nf.ReportingTask.init();
+                    nf.PolicyManagement.init();
+                    nf.ProcessorConfiguration.init();
+                    nf.ProcessGroupConfiguration.init();
+                    nf.RemoteProcessGroupConfiguration.init();
+                    nf.RemoteProcessGroupPorts.init();
+                    nf.PortConfiguration.init();
+                    nf.LabelConfiguration.init();
+                    nf.ProcessorDetails.init();
+                    nf.PortDetails.init();
+                    nf.ConnectionDetails.init();
+                    nf.RemoteProcessGroupDetails.init();
+                    nf.GoTo.init();
+                    nf.Graph.init().done(function () {
+                        nf.ng.Bridge.injector.get('graphControlsCtrl').init();
+
+                        // determine the split between the polling
+                        var pollingSplit = autoRefreshIntervalSeconds / 2;
+
+                        // register the polling
+                        setTimeout(function () {
+                            startPolling(autoRefreshIntervalSeconds);
+                        }, pollingSplit * 1000);
+
+                        // hide the splash screen
+                        nf.Canvas.hideSplash();
+                    }).fail(nf.Common.handleAjaxError);
+                }).fail(nf.Common.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
+        },
+
+        /**
+         * Return whether this instance of NiFi is clustered.
+         *
+         * @returns {Boolean}
+         */
+        isClustered: function () {
+            return clustered === true;
+        },
+
+        /**
+         * Return whether this instance is connected to a cluster.
+         *
+         * @returns {boolean}
+         */
+        isConnectedToCluster: function () {
+            return connectedToCluster === true;
         },
 
         /**
@@ -877,15 +1056,6 @@
         },
 
         /**
-         * Set whether the authorizer is configurable.
-         *
-         * @param bool The boolean value representing whether the authorizer is configurable.
-         */
-        setConfigurableAuthorizer: function(bool){
-            configurableAuthorizer = bool;
-        },
-
-        /**
          * Returns whether the authorizer is configurable.
          */
         isConfigurableAuthorizer: function () {
@@ -893,7 +1063,7 @@
         },
 
         /**
-         * Whether the current user can read from this group.
+         * Whether the current user can write in this group.
          *
          * @returns {boolean}   can write
          */
@@ -918,17 +1088,6 @@
             }
         },
 
-        /**
-         * Starts polling.
-         *
-         * @argument {int} autoRefreshInterval      The auto refresh interval
-         */
-        startPolling: function (autoRefreshInterval) {
-            // set polling flag
-            polling = true;
-            poll(autoRefreshInterval);
-        },
-
         View: (function () {
 
             /**
@@ -936,8 +1095,8 @@
              */
             var updateComponentVisibility = function () {
                 var canvasContainer = $('#canvas-container');
-                var translate = nfCanvas.View.translate();
-                var scale = nfCanvas.View.scale();
+                var translate = nf.Canvas.View.translate();
+                var scale = nf.Canvas.View.scale();
 
                 // scale the translation
                 translate = [translate[0] / scale, translate[1] / scale];
@@ -954,7 +1113,7 @@
 
                 // detects whether a component is visible and should be rendered
                 var isComponentVisible = function (d) {
-                    if (!nfCanvas.View.shouldRenderPerScale()) {
+                    if (!nf.Canvas.View.shouldRenderPerScale()) {
                         return false;
                     }
 
@@ -969,7 +1128,7 @@
 
                 // detects whether a connection is visible and should be rendered
                 var isConnectionVisible = function (d) {
-                    if (!nfCanvas.View.shouldRenderPerScale()) {
+                    if (!nf.Canvas.View.shouldRenderPerScale()) {
                         return false;
                     }
 
@@ -1002,7 +1161,7 @@
                 };
 
                 // get the all components
-                var graph = nfGraph.get();
+                var graph = nf.Graph.get();
 
                 // update the visibility for each component
                 $.each(graph.processors, function (_, d) {
@@ -1037,7 +1196,7 @@
                         .scale(SCALE)
                         .on('zoomstart', function () {
                             // hide the context menu
-                            nfContextMenu.hide();
+                            nf.ContextMenu.hide();
                         })
                         .on('zoom', function () {
                             // if we have zoomed, indicate that we are panning
@@ -1054,7 +1213,7 @@
                             var transition = d3.event.sourceEvent.type === 'wheel' || d3.event.sourceEvent.type === 'mousewheel';
 
                             // refresh the canvas
-                            refreshed = nfCanvas.View.refresh({
+                            refreshed = nf.Canvas.View.refresh({
                                 persist: false,
                                 transition: transition,
                                 refreshComponents: false,
@@ -1063,16 +1222,16 @@
                         })
                         .on('zoomend', function () {
                             // ensure the canvas was actually refreshed
-                            if (nfCommon.isDefinedAndNotNull(refreshed)) {
-                                nfCanvas.View.updateVisibility();
+                            if (nf.Common.isDefinedAndNotNull(refreshed)) {
+                                nf.Canvas.View.updateVisibility();
 
                                 // refresh the birdseye
                                 refreshed.done(function () {
-                                    nfBirdseye.refresh();
+                                    nf.Birdseye.refresh();
                                 });
 
                                 // persist the users view
-                                nfCanvasUtils.persistUserView();
+                                nf.CanvasUtils.persistUserView();
 
                                 // reset the refreshed deferred
                                 refreshed = null;
@@ -1092,7 +1251,7 @@
                  * @returns {Boolean}
                  */
                 shouldRenderPerScale: function () {
-                    return nfCanvas.View.scale() >= MIN_SCALE_TO_RENDER;
+                    return nf.Canvas.View.scale() >= MIN_SCALE_TO_RENDER;
                 },
 
                 /**
@@ -1100,7 +1259,7 @@
                  */
                 updateVisibility: function () {
                     updateComponentVisibility();
-                    nfGraph.pan();
+                    nf.Graph.pan();
                 },
 
                 /**
@@ -1109,7 +1268,7 @@
                  * @param {array} translate     [x, y]
                  */
                 translate: function (translate) {
-                    if (nfCommon.isUndefined(translate)) {
+                    if (nf.Common.isUndefined(translate)) {
                         return behavior.translate();
                     } else {
                         behavior.translate(translate);
@@ -1122,7 +1281,7 @@
                  * @param {number} scale        The new scale
                  */
                 scale: function (scale) {
-                    if (nfCommon.isUndefined(scale)) {
+                    if (nf.Common.isUndefined(scale)) {
                         return behavior.scale();
                     } else {
                         behavior.scale(scale);
@@ -1133,8 +1292,8 @@
                  * Zooms in a single zoom increment.
                  */
                 zoomIn: function () {
-                    var translate = nfCanvas.View.translate();
-                    var scale = nfCanvas.View.scale();
+                    var translate = nf.Canvas.View.translate();
+                    var scale = nf.Canvas.View.scale();
                     var newScale = Math.min(scale * INCREMENT, MAX_SCALE);
 
                     // get the canvas normalized width and height
@@ -1143,10 +1302,10 @@
                     var screenHeight = canvasContainer.height() / scale;
 
                     // adjust the scale
-                    nfCanvas.View.scale(newScale);
+                    nf.Canvas.View.scale(newScale);
 
                     // center around the center of the screen accounting for the translation accordingly
-                    nfCanvasUtils.centerBoundingBox({
+                    nf.CanvasUtils.centerBoundingBox({
                         x: (screenWidth / 2) - (translate[0] / scale),
                         y: (screenHeight / 2) - (translate[1] / scale),
                         width: 1,
@@ -1158,8 +1317,8 @@
                  * Zooms out a single zoom increment.
                  */
                 zoomOut: function () {
-                    var translate = nfCanvas.View.translate();
-                    var scale = nfCanvas.View.scale();
+                    var translate = nf.Canvas.View.translate();
+                    var scale = nf.Canvas.View.scale();
                     var newScale = Math.max(scale / INCREMENT, MIN_SCALE);
 
                     // get the canvas normalized width and height
@@ -1168,10 +1327,10 @@
                     var screenHeight = canvasContainer.height() / scale;
 
                     // adjust the scale
-                    nfCanvas.View.scale(newScale);
+                    nf.Canvas.View.scale(newScale);
 
                     // center around the center of the screen accounting for the translation accordingly
-                    nfCanvasUtils.centerBoundingBox({
+                    nf.CanvasUtils.centerBoundingBox({
                         x: (screenWidth / 2) - (translate[0] / scale),
                         y: (screenHeight / 2) - (translate[1] / scale),
                         width: 1,
@@ -1183,8 +1342,8 @@
                  * Zooms to fit the entire graph on the canvas.
                  */
                 fit: function () {
-                    var translate = nfCanvas.View.translate();
-                    var scale = nfCanvas.View.scale();
+                    var translate = nf.Canvas.View.translate();
+                    var scale = nf.Canvas.View.scale();
                     var newScale;
 
                     // get the canvas normalized width and height
@@ -1197,7 +1356,7 @@
                     var graphWidth = graphBox.width / scale;
                     var graphHeight = graphBox.height / scale;
                     var graphLeft = graphBox.left / scale;
-                    var graphTop = (graphBox.top - nfCanvas.CANVAS_OFFSET) / scale;
+                    var graphTop = (graphBox.top - nf.Canvas.CANVAS_OFFSET) / scale;
 
 
                     // adjust the scale to ensure the entire graph is visible
@@ -1215,10 +1374,10 @@
                     }
 
                     // set the new scale
-                    nfCanvas.View.scale(newScale);
+                    nf.Canvas.View.scale(newScale);
 
                     // center as appropriate
-                    nfCanvasUtils.centerBoundingBox({
+                    nf.CanvasUtils.centerBoundingBox({
                         x: graphLeft - (translate[0] / scale),
                         y: graphTop - (translate[1] / scale),
                         width: canvasWidth / newScale,
@@ -1230,14 +1389,14 @@
                  * Zooms to the actual size (1 to 1).
                  */
                 actualSize: function () {
-                    var translate = nfCanvas.View.translate();
-                    var scale = nfCanvas.View.scale();
+                    var translate = nf.Canvas.View.translate();
+                    var scale = nf.Canvas.View.scale();
 
                     // get the first selected component
-                    var selection = nfCanvasUtils.getSelection();
+                    var selection = nf.CanvasUtils.getSelection();
 
                     // set the updated scale
-                    nfCanvas.View.scale(1);
+                    nf.Canvas.View.scale(1);
 
                     // box to zoom towards
                     var box;
@@ -1250,7 +1409,7 @@
                         // get the bounding box for the selected components
                         box = {
                             x: (selectionBox.left / scale) - (translate[0] / scale),
-                            y: ((selectionBox.top - nfCanvas.CANVAS_OFFSET) / scale) - (translate[1] / scale),
+                            y: ((selectionBox.top - nf.Canvas.CANVAS_OFFSET) / scale) - (translate[1] / scale),
                             width: selectionBox.width / scale,
                             height: selectionBox.height / scale
                         };
@@ -1272,7 +1431,7 @@
                     }
 
                     // center as appropriate
-                    nfCanvasUtils.centerBoundingBox(box);
+                    nf.CanvasUtils.centerBoundingBox(box);
                 },
 
                 /**
@@ -1289,21 +1448,21 @@
                         var refreshBirdseye = true;
 
                         // extract the options if specified
-                        if (nfCommon.isDefinedAndNotNull(options)) {
-                            persist = nfCommon.isDefinedAndNotNull(options.persist) ? options.persist : persist;
-                            transition = nfCommon.isDefinedAndNotNull(options.transition) ? options.transition : transition;
-                            refreshComponents = nfCommon.isDefinedAndNotNull(options.refreshComponents) ? options.refreshComponents : refreshComponents;
-                            refreshBirdseye = nfCommon.isDefinedAndNotNull(options.refreshBirdseye) ? options.refreshBirdseye : refreshBirdseye;
+                        if (nf.Common.isDefinedAndNotNull(options)) {
+                            persist = nf.Common.isDefinedAndNotNull(options.persist) ? options.persist : persist;
+                            transition = nf.Common.isDefinedAndNotNull(options.transition) ? options.transition : transition;
+                            refreshComponents = nf.Common.isDefinedAndNotNull(options.refreshComponents) ? options.refreshComponents : refreshComponents;
+                            refreshBirdseye = nf.Common.isDefinedAndNotNull(options.refreshBirdseye) ? options.refreshBirdseye : refreshBirdseye;
                         }
 
                         // update component visibility
                         if (refreshComponents) {
-                            nfCanvas.View.updateVisibility();
+                            nf.Canvas.View.updateVisibility();
                         }
 
                         // persist if appropriate
                         if (persist === true) {
-                            nfCanvasUtils.persistUserView();
+                            nf.CanvasUtils.persistUserView();
                         }
 
                         // update the canvas
@@ -1316,7 +1475,7 @@
                                 .each('end', function () {
                                     // refresh birdseye if appropriate
                                     if (refreshBirdseye === true) {
-                                        nfBirdseye.refresh();
+                                        nf.Birdseye.refresh();
                                     }
 
                                     deferred.resolve();
@@ -1328,7 +1487,7 @@
 
                             // refresh birdseye if appropriate
                             if (refreshBirdseye === true) {
-                                nfBirdseye.refresh();
+                                nf.Birdseye.refresh();
                             }
 
                             deferred.resolve();
@@ -1338,6 +1497,4 @@
             };
         }())
     };
-
-    return nfCanvas;
-}));
+}());

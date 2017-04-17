@@ -14,4 +14,3 @@
 # limitations under the License.
 
 org.apache.nifi.reporting.SiteToSiteProvenanceReportingTask
-org.apache.nifi.reporting.SiteToSiteBulletinReportingTask

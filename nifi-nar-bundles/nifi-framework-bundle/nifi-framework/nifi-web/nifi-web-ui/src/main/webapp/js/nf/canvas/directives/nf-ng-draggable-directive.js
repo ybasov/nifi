@@ -15,29 +15,13 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define([],
-            function () {
-                return (nf.ng.DraggableDirective = factory());
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.ng.DraggableDirective =
-            factory());
-    } else {
-        nf.ng.DraggableDirective = factory();
-    }
-}(this, function () {
-    'use strict';
-
-    return function () {
-        return {
-            restrict: 'AE',
-            link: function (scope, element, attrs) {
-                element.draggable(scope.$eval(attrs.nfDraggable));
-            }
-        };
+nf.ng.DraggableDirective = function () {
+    return {
+        restrict: 'AE',
+        link: function (scope, element, attrs) {
+            element.draggable(scope.$eval(attrs.nfDraggable));
+        }
     };
-}));
+};

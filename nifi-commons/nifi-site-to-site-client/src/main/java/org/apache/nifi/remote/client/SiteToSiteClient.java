@@ -39,11 +39,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
-import java.net.InetAddress;
 import java.security.KeyStore;
 import java.security.SecureRandom;
-import java.util.LinkedHashSet;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -150,7 +147,7 @@ public interface SiteToSiteClient extends Closeable {
 
         private static final long serialVersionUID = -4954962284343090219L;
 
-        private Set<String> urls;
+        private String url;
         private long timeoutNanos = TimeUnit.SECONDS.toNanos(30);
         private long penalizationNanos = TimeUnit.SECONDS.toNanos(3);
         private long idleExpirationNanos = TimeUnit.SECONDS.toNanos(30L);
@@ -169,7 +166,6 @@ public interface SiteToSiteClient extends Closeable {
         private int batchCount;
         private long batchSize;
         private long batchNanos;
-        private InetAddress localAddress;
         private SiteToSiteTransportProtocol transportProtocol = SiteToSiteTransportProtocol.RAW;
         private HttpProxy httpProxy;
 
@@ -180,7 +176,7 @@ public interface SiteToSiteClient extends Closeable {
          * @return the builder
          */
         public Builder fromConfig(final SiteToSiteClientConfig config) {
-            this.urls = config.getUrls();
+            this.url = config.getUrl();
             this.timeoutNanos = config.getTimeout(TimeUnit.NANOSECONDS);
             this.penalizationNanos = config.getPenalizationPeriod(TimeUnit.NANOSECONDS);
             this.idleExpirationNanos = config.getIdleConnectionExpiration(TimeUnit.NANOSECONDS);
@@ -200,63 +196,21 @@ public interface SiteToSiteClient extends Closeable {
             this.batchCount = config.getPreferredBatchCount();
             this.batchSize = config.getPreferredBatchSize();
             this.batchNanos = config.getPreferredBatchDuration(TimeUnit.NANOSECONDS);
-            this.localAddress = config.getLocalAddress();
             this.httpProxy = config.getHttpProxy();
 
             return this;
         }
 
         /**
-         * <p>Specifies the URL of the remote NiFi instance.</p>
-         * <p>If this URL points to a NiFi node in a NiFi cluster, data transfer to and from
-         * nodes will be automatically load balanced across the different nodes.</p>
-         *
-         * <p>For better connectivity with a NiFi cluster, use {@link #urls(Set)} instead.</p>
+         * Specifies the URL of the remote NiFi instance. If this URL points to
+         * the Cluster Manager of a NiFi cluster, data transfer to and from
+         * nodes will be automatically load balanced across the different nodes.
          *
          * @param url url of remote instance
          * @return the builder
          */
         public Builder url(final String url) {
-            final Set<String> urls = new LinkedHashSet<>();
-            if (url != null && url.length() > 0) {
-                urls.add(url);
-            }
-            this.urls = urls;
-            return this;
-        }
-
-        /**
-         * <p>
-         * Specifies the local address to use when communicating with the remote NiFi instance.
-         * </p>
-         *
-         * @param localAddress the local address to use, or <code>null</code> to use <code>anyLocal</code> address.
-         * @return the builder
-         */
-        public Builder localAddress(final InetAddress localAddress) {
-            this.localAddress = localAddress;
-            return this;
-        }
-
-        /**
-         * <p>
-         * Specifies the URLs of the remote NiFi instance.
-         * </p>
-         * <p>
-         * If this URL points to a NiFi node in a NiFi cluster, data transfer to and from
-         * nodes will be automatically load balanced across the different nodes.
-         * </p>
-         *
-         * <p>
-         * Multiple urls provide better connectivity with a NiFi cluster, able to connect
-         * to the target cluster at long as one of the specified urls is accessible.
-         * </p>
-         *
-         * @param urls urls of remote instance
-         * @return the builder
-         */
-        public Builder urls(final Set<String> urls) {
-            this.urls = urls;
+            this.url = url;
             return this;
         }
 
@@ -588,7 +542,7 @@ public interface SiteToSiteClient extends Closeable {
          *             or if the transport protocol is not supported.
          */
         public SiteToSiteClient build() {
-            if (urls == null) {
+            if (url == null) {
                 throw new IllegalStateException("Must specify URL to build Site-to-Site client");
             }
 
@@ -610,10 +564,7 @@ public interface SiteToSiteClient extends Closeable {
          * @return the configured URL for the remote NiFi instance
          */
         public String getUrl() {
-            if (urls != null && urls.size() > 0) {
-                return urls.iterator().next();
-            }
-            return null;
+            return url;
         }
 
         /**
@@ -717,8 +668,7 @@ public interface SiteToSiteClient extends Closeable {
 
         private static final long serialVersionUID = 1L;
 
-        // This Set instance has to be initialized here to be serialized via Kryo.
-        private final Set<String> urls = new LinkedHashSet<>();
+        private final String url;
         private final long timeoutNanos;
         private final long penalizationNanos;
         private final long idleExpirationNanos;
@@ -739,10 +689,10 @@ public interface SiteToSiteClient extends Closeable {
         private final long batchSize;
         private final long batchNanos;
         private final HttpProxy httpProxy;
-        private final InetAddress localAddress;
 
         // some serialization frameworks require a default constructor
         private StandardSiteToSiteClientConfig() {
+            this.url = null;
             this.timeoutNanos = 0;
             this.penalizationNanos = 0;
             this.idleExpirationNanos = 0;
@@ -763,13 +713,10 @@ public interface SiteToSiteClient extends Closeable {
             this.batchNanos = 0;
             this.transportProtocol = null;
             this.httpProxy = null;
-            this.localAddress = null;
         }
 
         private StandardSiteToSiteClientConfig(final SiteToSiteClient.Builder builder) {
-            if (builder.urls != null) {
-                this.urls.addAll(builder.urls);
-            }
+            this.url = builder.url;
             this.timeoutNanos = builder.timeoutNanos;
             this.penalizationNanos = builder.penalizationNanos;
             this.idleExpirationNanos = builder.idleExpirationNanos;
@@ -790,7 +737,6 @@ public interface SiteToSiteClient extends Closeable {
             this.batchNanos = builder.batchNanos;
             this.transportProtocol = builder.getTransportProtocol();
             this.httpProxy = builder.getHttpProxy();
-            this.localAddress = builder.localAddress;
         }
 
         @Override
@@ -800,15 +746,7 @@ public interface SiteToSiteClient extends Closeable {
 
         @Override
         public String getUrl() {
-            if (urls != null && urls.size() > 0) {
-                return urls.iterator().next();
-            }
-            return null;
-        }
-
-        @Override
-        public Set<String> getUrls() {
-            return urls;
+            return url;
         }
 
         @Override
@@ -955,11 +893,6 @@ public interface SiteToSiteClient extends Closeable {
         @Override
         public HttpProxy getHttpProxy() {
             return httpProxy;
-        }
-
-        @Override
-        public InetAddress getLocalAddress() {
-            return localAddress;
         }
     }
 }

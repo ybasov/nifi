@@ -62,8 +62,8 @@ public class HiveConfigurator {
         return problems;
     }
 
-    public HiveConf getConfigurationFromFiles(final String configFiles) {
-        final HiveConf hiveConfig = new HiveConf();
+    public Configuration getConfigurationFromFiles(final String configFiles) {
+        final Configuration hiveConfig = new HiveConf();
         if (StringUtils.isNotBlank(configFiles)) {
             for (final String configFile : configFiles.split(",")) {
                 hiveConfig.addResource(new Path(configFile.trim()));
@@ -74,8 +74,7 @@ public class HiveConfigurator {
 
     public void preload(Configuration configuration) {
         try {
-            FileSystem.get(configuration).close();
-            UserGroupInformation.setConfiguration(configuration);
+            FileSystem.get(configuration);
         } catch (IOException ioe) {
             // Suppress exception as future uses of this configuration will fail
         }

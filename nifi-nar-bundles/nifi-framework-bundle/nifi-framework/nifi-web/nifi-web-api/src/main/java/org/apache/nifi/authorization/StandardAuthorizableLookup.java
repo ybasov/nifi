@@ -17,7 +17,6 @@
 package org.apache.nifi.authorization;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.nifi.annotation.behavior.Restricted;
 import org.apache.nifi.authorization.resource.AccessPolicyAuthorizable;
 import org.apache.nifi.authorization.resource.Authorizable;
 import org.apache.nifi.authorization.resource.DataAuthorizable;
@@ -27,8 +26,6 @@ import org.apache.nifi.authorization.resource.ResourceType;
 import org.apache.nifi.authorization.resource.RestrictedComponentsAuthorizable;
 import org.apache.nifi.authorization.resource.TenantAuthorizable;
 import org.apache.nifi.authorization.user.NiFiUser;
-import org.apache.nifi.bundle.BundleCoordinate;
-import org.apache.nifi.components.ConfigurableComponent;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.connectable.Connectable;
 import org.apache.nifi.connectable.Connection;
@@ -37,16 +34,15 @@ import org.apache.nifi.controller.ConfiguredComponent;
 import org.apache.nifi.controller.ProcessorNode;
 import org.apache.nifi.controller.ReportingTaskNode;
 import org.apache.nifi.controller.Snippet;
+import org.apache.nifi.controller.Template;
 import org.apache.nifi.controller.service.ControllerServiceNode;
 import org.apache.nifi.controller.service.ControllerServiceReference;
 import org.apache.nifi.groups.ProcessGroup;
-import org.apache.nifi.nar.ExtensionManager;
 import org.apache.nifi.remote.PortAuthorizationResult;
 import org.apache.nifi.remote.RootGroupPort;
-import org.apache.nifi.util.BundleUtils;
 import org.apache.nifi.web.ResourceNotFoundException;
-import org.apache.nifi.web.api.dto.BundleDTO;
 import org.apache.nifi.web.api.dto.FlowSnippetDTO;
+import org.apache.nifi.web.api.dto.TemplateDTO;
 import org.apache.nifi.web.controller.ControllerFacade;
 import org.apache.nifi.web.dao.AccessPolicyDAO;
 import org.apache.nifi.web.dao.ConnectionDAO;
@@ -144,19 +140,19 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
     }
 
     @Override
-    public ComponentAuthorizable getConfigurableComponent(final String type, final BundleDTO bundle) {
-        try {
-            final ConfigurableComponent configurableComponent = controllerFacade.getTemporaryComponent(type, bundle);
-            return new ConfigurableComponentAuthorizable(configurableComponent);
-        } catch (final Exception e) {
-            throw new AccessDeniedException("Unable to create component to verify if it references any Controller Services.");
-        }
+    public ConfigurableComponentAuthorizable getProcessor(final String id) {
+        final ProcessorNode processorNode = processorDAO.getProcessor(id);
+        return new ProcessorConfigurableComponentAuthorizable(processorNode);
     }
 
     @Override
-    public ComponentAuthorizable getProcessor(final String id) {
-        final ProcessorNode processorNode = processorDAO.getProcessor(id);
-        return new ProcessorComponentAuthorizable(processorNode);
+    public ConfigurableComponentAuthorizable getProcessorByType(String type) {
+        try {
+            final ProcessorNode processorNode = controllerFacade.createTemporaryProcessor(type);
+            return new ProcessorConfigurableComponentAuthorizable(processorNode);
+        } catch (final Exception e) {
+            throw new AccessDeniedException("Unable to create processor to verify if it references any Controller Services.");
+        }
     }
 
     @Override
@@ -253,9 +249,19 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
     }
 
     @Override
-    public ComponentAuthorizable getControllerService(final String id) {
+    public ConfigurableComponentAuthorizable getControllerService(final String id) {
         final ControllerServiceNode controllerService = controllerServiceDAO.getControllerService(id);
-        return new ControllerServiceComponentAuthorizable(controllerService);
+        return new ControllerServiceConfigurableComponentAuthorizable(controllerService);
+    }
+
+    @Override
+    public ConfigurableComponentAuthorizable getControllerServiceByType(String type) {
+        try {
+            final ControllerServiceNode controllerService = controllerFacade.createTemporaryControllerService(type);
+            return new ControllerServiceConfigurableComponentAuthorizable(controllerService);
+        } catch (final Exception e) {
+            throw new AccessDeniedException("Unable to create controller service to verify if it references any Controller Services.");
+        }
     }
 
     @Override
@@ -302,9 +308,19 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
     }
 
     @Override
-    public ComponentAuthorizable getReportingTask(final String id) {
+    public ConfigurableComponentAuthorizable getReportingTask(final String id) {
         final ReportingTaskNode reportingTaskNode = reportingTaskDAO.getReportingTask(id);
-        return new ReportingTaskComponentAuthorizable(reportingTaskNode);
+        return new ReportingTaskConfigurableComponentAuthorizable(reportingTaskNode);
+    }
+
+    @Override
+    public ConfigurableComponentAuthorizable getReportingTaskByType(String type) {
+        try {
+            final ReportingTaskNode reportingTask = controllerFacade.createTemporaryReportingTask(type);
+            return new ReportingTaskConfigurableComponentAuthorizable(reportingTask);
+        } catch (final Exception e) {
+            throw new AccessDeniedException("Unable to create reporting to verify if it references any Controller Services.");
+        }
     }
 
     @Override
@@ -314,12 +330,7 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
 
         return new SnippetAuthorizable() {
             @Override
-            public Authorizable getParentProcessGroup() {
-                return processGroup;
-            }
-
-            @Override
-            public Set<ComponentAuthorizable> getSelectedProcessors() {
+            public Set<ConfigurableComponentAuthorizable> getSelectedProcessors() {
                 return processGroup.getProcessors().stream()
                         .filter(processor -> snippet.getProcessors().containsKey(processor.getIdentifier()))
                         .map(processor -> getProcessor(processor.getIdentifier()))
@@ -494,7 +505,7 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
                 authorizable = getReportingTask(componentId).getAuthorizable();
                 break;
             case Template:
-                authorizable = getTemplate(componentId);
+                authorizable = getTemplate(componentId).getAuthorizable();
                 break;
         }
 
@@ -598,33 +609,19 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
      * @param controllerServices    controller services
      */
     private void createTemporaryProcessorsAndControllerServices(final FlowSnippetDTO snippet,
-                                                                final Set<ComponentAuthorizable> processors,
-                                                                final Set<ComponentAuthorizable> controllerServices) {
+                                                                final Set<ConfigurableComponentAuthorizable> processors,
+                                                                final Set<ConfigurableComponentAuthorizable> controllerServices) {
 
         if (snippet == null) {
             return;
         }
 
         if (snippet.getProcessors() != null) {
-            snippet.getProcessors().forEach(processor -> {
-                try {
-                    final BundleCoordinate bundle = BundleUtils.getCompatibleBundle(processor.getType(), processor.getBundle());
-                    processors.add(getConfigurableComponent(processor.getType(), new BundleDTO(bundle.getGroup(), bundle.getId(), bundle.getVersion())));
-                } catch (final IllegalStateException e) {
-                    // no compatible bundles... no additional auth checks necessary... if created, will be ghosted
-                }
-            });
+            processors.addAll(snippet.getProcessors().stream().map(processor -> getProcessorByType(processor.getType())).collect(Collectors.toSet()));
         }
 
         if (snippet.getControllerServices() != null) {
-            snippet.getControllerServices().forEach(controllerService -> {
-                try {
-                    final BundleCoordinate bundle = BundleUtils.getCompatibleBundle(controllerService.getType(), controllerService.getBundle());
-                    controllerServices.add(getConfigurableComponent(controllerService.getType(), new BundleDTO(bundle.getGroup(), bundle.getId(), bundle.getVersion())));
-                } catch (final IllegalStateException e) {
-                    // no compatible bundles... no additional auth checks necessary... if created, will be ghosted
-                }
-            });
+            controllerServices.addAll(snippet.getControllerServices().stream().map(controllerService -> getControllerServiceByType(controllerService.getType())).collect(Collectors.toSet()));
         }
 
         if (snippet.getProcessGroups() != null) {
@@ -633,27 +630,30 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
     }
 
     @Override
-    public Authorizable getTemplate(String id) {
-        return templateDAO.getTemplate(id);
-    }
+    public TemplateAuthorizable getTemplate(final String id) {
+        final Template template = templateDAO.getTemplate(id);
+        final TemplateDTO contents = template.getDetails();
 
-    @Override
-    public TemplateContentsAuthorizable getTemplateContents(final FlowSnippetDTO snippet) {
         // templates are immutable so we can pre-compute all encapsulated processors and controller services
-        final Set<ComponentAuthorizable> processors = new HashSet<>();
-        final Set<ComponentAuthorizable> controllerServices = new HashSet<>();
+        final Set<ConfigurableComponentAuthorizable> processors = new HashSet<>();
+        final Set<ConfigurableComponentAuthorizable> controllerServices = new HashSet<>();
 
         // find all processors and controller services
-        createTemporaryProcessorsAndControllerServices(snippet, processors, controllerServices);
+        createTemporaryProcessorsAndControllerServices(contents.getSnippet(), processors, controllerServices);
 
-        return new TemplateContentsAuthorizable() {
+        return new TemplateAuthorizable() {
             @Override
-            public Set<ComponentAuthorizable> getEncapsulatedProcessors() {
+            public Authorizable getAuthorizable() {
+                return template;
+            }
+
+            @Override
+            public Set<ConfigurableComponentAuthorizable> getEncapsulatedProcessors() {
                 return processors;
             }
 
             @Override
-            public Set<ComponentAuthorizable> getEncapsulatedControllerServices() {
+            public Set<ConfigurableComponentAuthorizable> getEncapsulatedControllerServices() {
                 return controllerServices;
             }
         };
@@ -682,54 +682,12 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
     }
 
     /**
-     * ComponentAuthorizable for a ConfigurableComponent. This authorizable is intended only to be used when
-     * creating new components.
+     * ConfigurableComponentAuthorizable for a ProcessorNode.
      */
-    private static class ConfigurableComponentAuthorizable implements ComponentAuthorizable {
-        private final ConfigurableComponent configurableComponent;
-
-        public ConfigurableComponentAuthorizable(final ConfigurableComponent configurableComponent) {
-            this.configurableComponent = configurableComponent;
-        }
-
-        @Override
-        public Authorizable getAuthorizable() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public boolean isRestricted() {
-            return configurableComponent.getClass().isAnnotationPresent(Restricted.class);
-        }
-
-        @Override
-        public String getValue(PropertyDescriptor propertyDescriptor) {
-            return null;
-        }
-
-        @Override
-        public PropertyDescriptor getPropertyDescriptor(String propertyName) {
-            return configurableComponent.getPropertyDescriptor(propertyName);
-        }
-
-        @Override
-        public List<PropertyDescriptor> getPropertyDescriptors() {
-            return configurableComponent.getPropertyDescriptors();
-        }
-
-        @Override
-        public void cleanUpResources() {
-            ExtensionManager.removeInstanceClassLoader(configurableComponent.getIdentifier());
-        }
-    }
-
-    /**
-     * ComponentAuthorizable for a ProcessorNode.
-     */
-    private static class ProcessorComponentAuthorizable implements ComponentAuthorizable {
+    private static class ProcessorConfigurableComponentAuthorizable implements ConfigurableComponentAuthorizable {
         private final ProcessorNode processorNode;
 
-        public ProcessorComponentAuthorizable(ProcessorNode processorNode) {
+        public ProcessorConfigurableComponentAuthorizable(ProcessorNode processorNode) {
             this.processorNode = processorNode;
         }
 
@@ -757,20 +715,15 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
         public List<PropertyDescriptor> getPropertyDescriptors() {
             return processorNode.getPropertyDescriptors();
         }
-
-        @Override
-        public void cleanUpResources() {
-            ExtensionManager.removeInstanceClassLoader(processorNode.getIdentifier());
-        }
     }
 
     /**
-     * ComponentAuthorizable for a ControllerServiceNode.
+     * ConfigurableComponentAuthorizable for a ControllerServiceNode.
      */
-    private static class ControllerServiceComponentAuthorizable implements ComponentAuthorizable {
+    private static class ControllerServiceConfigurableComponentAuthorizable implements ConfigurableComponentAuthorizable {
         private final ControllerServiceNode controllerServiceNode;
 
-        public ControllerServiceComponentAuthorizable(ControllerServiceNode controllerServiceNode) {
+        public ControllerServiceConfigurableComponentAuthorizable(ControllerServiceNode controllerServiceNode) {
             this.controllerServiceNode = controllerServiceNode;
         }
 
@@ -798,20 +751,15 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
         public List<PropertyDescriptor> getPropertyDescriptors() {
             return controllerServiceNode.getControllerServiceImplementation().getPropertyDescriptors();
         }
-
-        @Override
-        public void cleanUpResources() {
-            ExtensionManager.removeInstanceClassLoader(controllerServiceNode.getIdentifier());
-        }
     }
 
     /**
-     * ComponentAuthorizable for a ProcessorNode.
+     * ConfigurableComponentAuthorizable for a ProcessorNode.
      */
-    private static class ReportingTaskComponentAuthorizable implements ComponentAuthorizable {
+    private static class ReportingTaskConfigurableComponentAuthorizable implements ConfigurableComponentAuthorizable {
         private final ReportingTaskNode reportingTaskNode;
 
-        public ReportingTaskComponentAuthorizable(ReportingTaskNode reportingTaskNode) {
+        public ReportingTaskConfigurableComponentAuthorizable(ReportingTaskNode reportingTaskNode) {
             this.reportingTaskNode = reportingTaskNode;
         }
 
@@ -839,11 +787,6 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
         public List<PropertyDescriptor> getPropertyDescriptors() {
             return reportingTaskNode.getReportingTask().getPropertyDescriptors();
         }
-
-        @Override
-        public void cleanUpResources() {
-            ExtensionManager.removeInstanceClassLoader(reportingTaskNode.getIdentifier());
-        }
     }
 
     private static class StandardProcessGroupAuthorizable implements ProcessGroupAuthorizable {
@@ -859,9 +802,9 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
         }
 
         @Override
-        public Set<ComponentAuthorizable> getEncapsulatedProcessors() {
+        public Set<ConfigurableComponentAuthorizable> getEncapsulatedProcessors() {
             return processGroup.findAllProcessors().stream().map(
-                    processorNode -> new ProcessorComponentAuthorizable(processorNode)).collect(Collectors.toSet());
+                    processorNode -> new ProcessorConfigurableComponentAuthorizable(processorNode)).collect(Collectors.toSet());
         }
 
         @Override
@@ -907,9 +850,9 @@ class StandardAuthorizableLookup implements AuthorizableLookup {
         }
 
         @Override
-        public Set<ComponentAuthorizable> getEncapsulatedControllerServices() {
+        public Set<ConfigurableComponentAuthorizable> getEncapsulatedControllerServices() {
             return processGroup.findAllControllerServices().stream().map(
-                    controllerServiceNode -> new ControllerServiceComponentAuthorizable(controllerServiceNode)).collect(Collectors.toSet());
+                    controllerServiceNode -> new ControllerServiceConfigurableComponentAuthorizable(controllerServiceNode)).collect(Collectors.toSet());
         }
     }
 

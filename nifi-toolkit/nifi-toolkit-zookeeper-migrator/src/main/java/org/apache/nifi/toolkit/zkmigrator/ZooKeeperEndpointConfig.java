@@ -21,35 +21,22 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
 
-import java.util.List;
 import java.util.Objects;
 
 class ZooKeeperEndpointConfig {
     private final String connectString;
-    private final List<String> servers;
     private final String path;
 
-    ZooKeeperEndpointConfig(String connectString) {
+    ZooKeeperEndpointConfig(String connectString, String path) {
         Preconditions.checkArgument(!Strings.isNullOrEmpty(connectString), "connectString can not be null or empty");
+        Preconditions.checkArgument(!Strings.isNullOrEmpty(path), "path can not be null or empty");
         this.connectString = connectString;
-
-        final String[] connectStringPath = connectString.split("/", 2);
-        this.servers = Lists.newArrayList(connectStringPath[0].split(","));
-        if (connectStringPath.length == 2) {
-            this.path = '/' + Joiner.on('/').join(Splitter.on('/').omitEmptyStrings().trimResults().split(connectStringPath[1]));
-        } else {
-            path = "/";
-        }
+        this.path = '/' + Joiner.on('/').join(Splitter.on('/').omitEmptyStrings().trimResults().split(path));
     }
 
     public String getConnectString() {
         return connectString;
-    }
-
-    public List getServers() {
-        return servers;
     }
 
     public String getPath() {
@@ -61,21 +48,18 @@ class ZooKeeperEndpointConfig {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ZooKeeperEndpointConfig that = (ZooKeeperEndpointConfig) o;
-        return Objects.equals(connectString, that.connectString)
-                && Objects.equals(servers, that.servers)
-                && Objects.equals(path, that.path);
+        return Objects.equals(connectString, that.connectString) && Objects.equals(path, that.path);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(connectString, servers, path);
+        return Objects.hash(connectString, path);
     }
 
     @Override
     public String toString() {
         return MoreObjects.toStringHelper(this)
                 .add("connectString", connectString)
-                .add("servers", servers)
                 .add("path", path)
                 .toString();
     }

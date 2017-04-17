@@ -19,7 +19,6 @@ package org.apache.nifi.persistence;
 import org.apache.nifi.processor.DataUnit;
 import org.apache.nifi.util.FormatUtils;
 import org.apache.nifi.util.NiFiProperties;
-import org.apache.nifi.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,16 +28,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Calendar;
-import java.util.Comparator;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class FlowConfigurationArchiveManager {
 
@@ -51,38 +48,35 @@ public class FlowConfigurationArchiveManager {
      * <li>yyyyMMddTHHmmssZ_original-file-name</li>
      */
     private final Pattern archiveFilenamePattern = Pattern.compile("^([\\d]{8}T[\\d]{6}([\\+\\-][\\d]{4}|Z))_.+$");
-    private final Path flowConfigFile;
+    private final Path flowFile;
     private final Path archiveDir;
-    private final Integer maxCount;
-    private final Long maxTimeMillis;
-    private final Long maxStorageBytes;
+    private final long maxTimeMillis;
+    private final long maxStorageBytes;
 
-    public FlowConfigurationArchiveManager(final Path flowConfigFile, final NiFiProperties properties) {
+    public FlowConfigurationArchiveManager(final Path flowFile, NiFiProperties properties) {
         final String archiveDirVal = properties.getFlowConfigurationArchiveDir();
         final Path archiveDir = (archiveDirVal == null || archiveDirVal.equals(""))
-                ? flowConfigFile.getParent().resolve("archive") : new File(archiveDirVal).toPath();
+                ? flowFile.getParent().resolve("archive") : new File(archiveDirVal).toPath();
 
-        this.maxCount = properties.getFlowConfigurationArchiveMaxCount();
+        final long archiveMaxTime =
+                FormatUtils.getTimeDuration(properties.getFlowConfigurationArchiveMaxTime(), TimeUnit.MILLISECONDS);
+        final long archiveMaxStorage =
+                DataUnit.parseDataSize(properties.getFlowConfigurationArchiveMaxStorage(), DataUnit.B).longValue();
 
-        String maxTime = properties.getFlowConfigurationArchiveMaxTime();
-        String maxStorage = properties.getFlowConfigurationArchiveMaxStorage();
-
-        if (maxCount == null && StringUtils.isBlank(maxTime) && StringUtils.isBlank(maxStorage)) {
-            // None of limitation is specified, fall back to the default configuration;
-            maxTime = NiFiProperties.DEFAULT_FLOW_CONFIGURATION_ARCHIVE_MAX_TIME;
-            maxStorage = NiFiProperties.DEFAULT_FLOW_CONFIGURATION_ARCHIVE_MAX_STORAGE;
-            logger.info("None of archive max limitation is specified, fall back to the default configuration, maxTime={}, maxStorage={}",
-                    maxTime, maxStorage);
-        }
-
-        this.maxTimeMillis = StringUtils.isBlank(maxTime) ? null : FormatUtils.getTimeDuration(maxTime, TimeUnit.MILLISECONDS);
-        this.maxStorageBytes = StringUtils.isBlank(maxStorage) ? null : DataUnit.parseDataSize(maxStorage, DataUnit.B).longValue();
-
-        this.flowConfigFile = flowConfigFile;
+        this.flowFile = flowFile;
         this.archiveDir = archiveDir;
+        this.maxTimeMillis = archiveMaxTime;
+        this.maxStorageBytes = archiveMaxStorage;
     }
 
-    private String createArchiveFileName(final String originalFlowConfigFileName) {
+    public FlowConfigurationArchiveManager(final Path flowFile, final Path archiveDir, long maxTimeMillis, long maxStorageBytes) {
+        this.flowFile = flowFile;
+        this.archiveDir = archiveDir;
+        this.maxTimeMillis = maxTimeMillis;
+        this.maxStorageBytes = maxStorageBytes;
+    }
+
+    private String createArchiveFileName(final String originalFlowFileName) {
         TimeZone tz = TimeZone.getDefault();
         Calendar cal = GregorianCalendar.getInstance(tz);
         int offsetInMillis = tz.getOffset(cal.getTimeInMillis());
@@ -99,7 +93,7 @@ public class FlowConfigurationArchiveManager {
                 Math.abs((offsetInMillis / 60000) % 60));
 
         return String.format("%d%02d%02dT%02d%02d%02d%s_%s",
-                year, month, day, hour, min, sec, offset, originalFlowConfigFileName);
+                year, month, day, hour, min, sec, offset, originalFlowFileName);
     }
 
     /**
@@ -113,19 +107,16 @@ public class FlowConfigurationArchiveManager {
         if (!Files.isDirectory(archiveDir)) {
             throw new IOException("Archive directory doesn't appear to be a directory " + archiveDir);
         }
-        final String originalFlowConfigFileName = flowConfigFile.getFileName().toString();
-        final Path archiveFile = archiveDir.resolve(createArchiveFileName(originalFlowConfigFileName));
+        final String originalFlowFileName = flowFile.getFileName().toString();
+        final Path archiveFile = archiveDir.resolve(createArchiveFileName(originalFlowFileName));
         return archiveFile.toFile();
     }
 
     /**
      * Archive current flow configuration file by copying the original file to the archive directory.
-     * Before creating new archive file, this method removes old archives to satisfy following conditions:
-     * <ul>
-     * <li>Number of archive files less than or equal to maxCount</li>
-     * <li>Keep archive files which has last modified timestamp no older than current system timestamp - maxTimeMillis</li>
-     * <li>Total size of archive files less than or equal to maxStorageBytes</li>
-     * </ul>
+     * After creating new archive file:
+     * <li>It removes expired archive files based on its last modification date and maxTimeMillis</li>
+     * <li>It removes old files until total size of archive files becomes less than maxStorageBytes</li>
      * This method keeps other files intact, so that users can keep particular archive by copying it with different name.
      * Whether a given file is archive file or not is determined by the filename.
      * Since archive file name consists of timestamp up to seconds, if archive is called multiple times within a second,
@@ -136,64 +127,65 @@ public class FlowConfigurationArchiveManager {
      * Although, other IOExceptions like the ones thrown during removing expired archive files will not be thrown.
      */
     public File archive() throws IOException {
-        final String originalFlowConfigFileName = flowConfigFile.getFileName().toString();
-
+        final String originalFlowFileName = flowFile.getFileName().toString();
         final File archiveFile = setupArchiveFile();
+        Files.copy(flowFile, archiveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
-        // Collect archive files by its name
+        // Collect archive files by its name, and group by expiry state.
         final long now = System.currentTimeMillis();
-        final AtomicLong totalArchiveSize = new AtomicLong(0);
-        final List<Path> archives = Files.walk(archiveDir, 1).filter(p -> {
+        final Map<Boolean, List<Path>> oldArchives = Files.walk(archiveDir, 1).filter(p -> {
             final String filename = p.getFileName().toString();
-            if (Files.isRegularFile(p) && filename.endsWith("_" + originalFlowConfigFileName)) {
+            if (Files.isRegularFile(p) && filename.endsWith("_" + originalFlowFileName)) {
                 final Matcher matcher = archiveFilenamePattern.matcher(filename);
-                if (matcher.matches() && filename.equals(matcher.group(1) + "_" + originalFlowConfigFileName)) {
-                    try {
-                        totalArchiveSize.getAndAdd(Files.size(p));
-                    } catch (IOException e) {
-                        logger.warn("Failed to get file size of {} due to {}", p, e);
-                    }
+                if (matcher.matches() && filename.equals(matcher.group(1) + "_" + originalFlowFileName)) {
                     return true;
                 }
             }
             return false;
-        }).collect(Collectors.toList());
+        }).collect(Collectors.groupingBy(p -> (now - p.toFile().lastModified()) > maxTimeMillis, Collectors.toList()));
 
-        // Sort by timestamp.
-        archives.sort(Comparator.comparingLong(path -> path.toFile().lastModified()));
+        logger.debug("oldArchives={}", oldArchives);
 
-        logger.debug("archives={}", archives);
+        // Remove expired files
+        final List<Path> expiredArchives = oldArchives.get(true);
+        if (expiredArchives != null) {
+            expiredArchives.stream().forEach(p -> {
+                try {
+                    logger.info("Removing expired archive file {}", p);
+                    Files.delete(p);
+                } catch (IOException e) {
+                    logger.warn("Failed to delete expired archive {} due to {}", p, e.toString());
+                }
+            });
+        }
 
-        final int archiveCount = archives.size();
-        final long flowConfigFileSize = Files.size(flowConfigFile);
-        IntStream.range(0, archiveCount).filter(i -> {
-            // If maxCount is specified, remove old archives
-            boolean old = maxCount != null && maxCount > 0 && (archiveCount - i) > maxCount - 1;
-            // If maxTime is specified, remove expired archives
-            final File archive = archives.get(i).toFile();
-            old = old || (maxTimeMillis != null && maxTimeMillis > 0 && (now - archive.lastModified()) > maxTimeMillis);
-            // If maxStorage is specified, remove old archives
-            old = old || (maxStorageBytes != null && maxStorageBytes > 0 && (totalArchiveSize.get() + flowConfigFileSize > maxStorageBytes));
-
-            if (old) {
-                totalArchiveSize.getAndAdd(archive.length() * -1);
-                logger.info("Removing old archive file {} to reduce storage usage. currentSize={}", archive, totalArchiveSize);
-            }
-            return old;
-        }).forEach(i -> {
+        // Calculate size
+        final List<Path> remainingArchives = oldArchives.get(false);
+        final long totalArchiveSize = remainingArchives.stream().mapToLong(p -> {
             try {
-                Files.delete(archives.get(i));
+                return Files.size(p);
             } catch (IOException e) {
-                logger.warn("Failed to delete {} to reduce storage usage, due to {}", archives.get(i), e);
+                logger.warn("Failed to get file size of {} due to {}", p, e.toString());
+                return 0;
             }
-        });
+        }).sum();
+        logger.debug("totalArchiveSize={}", totalArchiveSize);
 
-        // Create new archive file.
-        Files.copy(flowConfigFile, archiveFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-
-        if (maxStorageBytes != null && maxStorageBytes > 0 && flowConfigFileSize > maxStorageBytes) {
-            logger.warn("Size of {} ({}) exceeds configured maxStorage size ({}). Archive won't be able to keep old files.",
-                    flowConfigFile, flowConfigFileSize, maxStorageBytes);
+        // Remove old files until total size gets less than max storage size
+        remainingArchives.sort((a, b)
+                -> Long.valueOf(a.toFile().lastModified()).compareTo(Long.valueOf(b.toFile().lastModified())));
+        long reducedTotalArchiveSize = totalArchiveSize;
+        for (int i = 0; i < remainingArchives.size()
+                && reducedTotalArchiveSize > maxStorageBytes; i++) {
+            final Path path = remainingArchives.get(i);
+            try {
+                logger.info("Removing archive file {} to reduce storage usage. currentSize={}", path, reducedTotalArchiveSize);
+                final long size = Files.size(path);
+                Files.delete(path);
+                reducedTotalArchiveSize -= size;
+            } catch (IOException e) {
+                logger.warn("Failed to delete {} to reduce storage usage, due to {}", path, e.toString());
+            }
         }
 
         return archiveFile;

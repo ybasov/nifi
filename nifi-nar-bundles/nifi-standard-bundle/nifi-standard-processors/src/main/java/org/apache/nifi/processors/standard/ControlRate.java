@@ -77,9 +77,6 @@ public class ControlRate extends AbstractProcessor {
     public static final AllowableValue ATTRIBUTE_RATE_VALUE = new AllowableValue(ATTRIBUTE_RATE, ATTRIBUTE_RATE,
             "Rate is controlled by accumulating the value of a specified attribute that is transferred per time duration");
 
-    // based on testing to balance commits and 10,000 FF swap limit
-    public static final int MAX_FLOW_FILES_PER_BATCH = 1000;
-
     public static final PropertyDescriptor RATE_CONTROL_CRITERIA = new PropertyDescriptor.Builder()
             .name("Rate Control Criteria")
             .description("Indicates the criteria that is used to control the throughput rate. Changing this value resets the rate counters.")
@@ -236,7 +233,7 @@ public class ControlRate extends AbstractProcessor {
 
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
-        List<FlowFile> flowFiles = session.get(new ThrottleFilter(MAX_FLOW_FILES_PER_BATCH));
+        List<FlowFile> flowFiles = session.get(new ThrottleFilter());
         if (flowFiles.isEmpty()) {
             context.yield();
             return;
@@ -295,11 +292,11 @@ public class ControlRate extends AbstractProcessor {
             case ATTRIBUTE_RATE:
                 final String attributeValue = flowFile.getAttribute(rateControlAttribute);
                 if (attributeValue == null) {
-                    return -1L;
+                    return -1l;
                 }
 
                 if (!POSITIVE_LONG_PATTERN.matcher(attributeValue).matches()) {
-                    return -1L;
+                    return -1l;
                 }
                 rateValue = Long.parseLong(attributeValue);
                 break;
@@ -384,13 +381,6 @@ public class ControlRate extends AbstractProcessor {
 
     private class ThrottleFilter implements FlowFileFilter {
 
-        private final int flowFilesPerBatch;
-        private int flowFilesInBatch = 0;
-
-        ThrottleFilter(final int maxFFPerBatch) {
-            flowFilesPerBatch = maxFFPerBatch;
-        }
-
         @Override
         public FlowFileFilterResult filter(FlowFile flowFile) {
             long accrual = getFlowFileAccrual(flowFile);
@@ -419,13 +409,7 @@ public class ControlRate extends AbstractProcessor {
             throttle.lock();
             try {
                 if (throttle.tryAdd(accrual)) {
-                    flowFilesInBatch += 1;
-                    if (flowFilesInBatch>= flowFilesPerBatch) {
-                        flowFilesInBatch = 0;
-                        return FlowFileFilterResult.ACCEPT_AND_TERMINATE;
-                    } else {
-                        return FlowFileFilterResult.ACCEPT_AND_CONTINUE;
-                    }
+                    return FlowFileFilterResult.ACCEPT_AND_TERMINATE;
                 }
             } finally {
                 throttle.unlock();

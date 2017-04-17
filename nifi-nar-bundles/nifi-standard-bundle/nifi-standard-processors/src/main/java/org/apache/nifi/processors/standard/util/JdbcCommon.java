@@ -72,7 +72,6 @@ import org.apache.commons.lang3.StringUtils;
 public class JdbcCommon {
 
     private static final int MAX_DIGITS_IN_BIGINT = 19;
-    private static final int MAX_DIGITS_IN_INT = 9;
 
     public static long convertToAvroStream(final ResultSet rs, final OutputStream outStream, boolean convertNames) throws SQLException, IOException {
         return convertToAvroStream(rs, outStream, null, null, convertNames);
@@ -285,7 +284,7 @@ public class JdbcCommon {
                     break;
 
                 case INTEGER:
-                    if (meta.isSigned(i) || (meta.getPrecision(i) > 0 && meta.getPrecision(i) <= MAX_DIGITS_IN_INT)) {
+                    if (meta.isSigned(i)) {
                         builder.name(columnName).type().unionOf().nullBuilder().endNull().and().intType().endUnion().noDefault();
                     } else {
                         builder.name(columnName).type().unionOf().nullBuilder().endNull().and().longType().endUnion().noDefault();
@@ -347,8 +346,7 @@ public class JdbcCommon {
 
 
                 default:
-                    throw new IllegalArgumentException("createSchema: Unknown SQL type " + meta.getColumnType(i) + " / " + meta.getColumnTypeName(i)
-                            + " (table: " + tableName + ", column: " + columnName + ") cannot be converted to Avro type");
+                    throw new IllegalArgumentException("createSchema: Unknown SQL type " + meta.getColumnType(i) + " cannot be converted to Avro type");
             }
         }
 

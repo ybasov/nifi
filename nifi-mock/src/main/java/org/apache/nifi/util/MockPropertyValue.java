@@ -171,18 +171,12 @@ public class MockPropertyValue implements PropertyValue {
 
     @Override
     public PropertyValue evaluateAttributeExpressions(final FlowFile flowFile, final Map<String, String> additionalAttributes, final AttributeValueDecorator decorator) throws ProcessException {
-        return evaluateAttributeExpressions(flowFile, additionalAttributes, decorator, null);
-    }
-
-    @Override
-    public PropertyValue evaluateAttributeExpressions(FlowFile flowFile, Map<String, String> additionalAttributes, AttributeValueDecorator decorator, Map<String, String> stateValues)
-            throws ProcessException {
         markEvaluated();
         if (rawValue == null) {
             return this;
         }
 
-        final PropertyValue newValue = stdPropValue.evaluateAttributeExpressions(flowFile, additionalAttributes, decorator, stateValues);
+        final PropertyValue newValue = stdPropValue.evaluateAttributeExpressions(flowFile, additionalAttributes, decorator);
         return new MockPropertyValue(newValue.getValue(), serviceLookup, propertyDescriptor, true, variableRegistry);
     }
 

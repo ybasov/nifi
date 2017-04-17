@@ -23,7 +23,6 @@ import javax.net.ssl.SSLContext;
 
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyValue;
-import org.apache.nifi.logging.ComponentLog;
 
 /**
  * This interface defines an initialization context that is passed to a {@link StateProvider} when it
@@ -54,10 +53,4 @@ public interface StateProviderInitializationContext {
      *         or <code>null</code> if no SSLContext has been configured
      */
     SSLContext getSSLContext();
-
-    /**
-     * @return the logger for the given state provider
-     */
-    ComponentLog getLogger();
-
 }

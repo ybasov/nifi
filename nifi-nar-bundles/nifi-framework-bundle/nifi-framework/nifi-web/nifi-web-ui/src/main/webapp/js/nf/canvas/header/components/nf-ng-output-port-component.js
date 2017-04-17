@@ -15,244 +15,213 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'nf.Client',
-                'nf.Birdseye',
-                'nf.Graph',
-                'nf.CanvasUtils',
-                'nf.ErrorHandler'],
-            function ($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler) {
-                return (nf.ng.OutputPortComponent = factory($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.ng.OutputPortComponent =
-            factory(require('jquery'),
-                require('nf.Client'),
-                require('nf.Birdseye'),
-                require('nf.Graph'),
-                require('nf.CanvasUtils'),
-                require('nf.ErrorHandler')));
-    } else {
-        nf.ng.OutputPortComponent = factory(root.$,
-            root.nf.Client,
-            root.nf.Birdseye,
-            root.nf.Graph,
-            root.nf.CanvasUtils,
-            root.nf.ErrorHandler);
-    }
-}(this, function ($, nfClient, nfBirdseye, nfGraph, nfCanvasUtils, nfErrorHandler) {
+nf.ng.OutputPortComponent = function (serviceProvider) {
     'use strict';
 
-    return function (serviceProvider) {
-        'use strict';
-
-        /**
-         * Create the input port and add to the graph.
-         *
-         * @argument {string} portName          The output port name.
-         * @argument {object} pt                The point that the output port was dropped.
-         */
-        var createOutputPort = function (portName, pt) {
-            var outputPortEntity = {
-                'revision': nfClient.getRevision({
-                    'revision': {
-                        'version': 0
-                    }
-                }),
-                'component': {
-                    'name': portName,
-                    'position': {
-                        'x': pt.x,
-                        'y': pt.y
-                    }
+    /**
+     * Create the input port and add to the graph.
+     *
+     * @argument {string} portName          The output port name.
+     * @argument {object} pt                The point that the output port was dropped.
+     */
+    var createOutputPort = function (portName, pt) {
+        var outputPortEntity = {
+            'revision': nf.Client.getRevision({
+                'revision': {
+                    'version': 0
                 }
-            };
-
-            // create a new processor of the defined type
-            $.ajax({
-                type: 'POST',
-                url: serviceProvider.headerCtrl.toolboxCtrl.config.urls.api + '/process-groups/' + encodeURIComponent(nfCanvasUtils.getGroupId()) + '/output-ports',
-                data: JSON.stringify(outputPortEntity),
-                dataType: 'json',
-                contentType: 'application/json'
-            }).done(function (response) {
-                // add the port to the graph
-                nfGraph.add({
-                    'outputPorts': [response]
-                }, {
-                    'selectAll': true
-                });
-
-                // update component visibility
-                nfGraph.updateVisibility();
-
-                // update the birdseye
-                nfBirdseye.refresh();
-            }).fail(nfErrorHandler.handleAjaxError);
+            }),
+            'component': {
+                'name': portName,
+                'position': {
+                    'x': pt.x,
+                    'y': pt.y
+                }
+            }
         };
 
-        function OutputPortComponent() {
+        // create a new processor of the defined type
+        $.ajax({
+            type: 'POST',
+            url: serviceProvider.headerCtrl.toolboxCtrl.config.urls.api + '/process-groups/' + encodeURIComponent(nf.Canvas.getGroupId()) + '/output-ports',
+            data: JSON.stringify(outputPortEntity),
+            dataType: 'json',
+            contentType: 'application/json'
+        }).done(function (response) {
+            // add the port to the graph
+            nf.Graph.add({
+                'outputPorts': [response]
+            }, {
+                'selectAll': true
+            });
 
-            this.icon = 'icon icon-port-out';
+            // update component visibility
+            nf.Canvas.View.updateVisibility();
 
-            this.hoverIcon = 'icon icon-port-out-add';
+            // update the birdseye
+            nf.Birdseye.refresh();
+        }).fail(nf.Common.handleAjaxError);
+    };
 
-            /**
-             * The output port component's modal.
-             */
-            this.modal = {
+    function OutputPortComponent() {
 
-                /**
-                 * Gets the modal element.
-                 *
-                 * @returns {*|jQuery|HTMLElement}
-                 */
-                getElement: function () {
-                    return $('#new-port-dialog'); //Reuse the input port dialog....
-                },
+        this.icon = 'icon icon-port-out';
 
-                /**
-                 * Initialize the modal.
-                 */
-                init: function () {
-                    //Reuse the input port dialog....
-                },
+        this.hoverIcon = 'icon icon-port-out-add';
 
-                /**
-                 * Updates the modal config.
-                 *
-                 * @param {string} name             The name of the property to update.
-                 * @param {object|array} config     The config for the `name`.
-                 */
-                update: function (name, config) {
-                    this.getElement().modal(name, config);
-                },
-
-                /**
-                 * Show the modal.
-                 */
-                show: function () {
-                    this.getElement().modal('show');
-                },
-
-                /**
-                 * Hide the modal.
-                 */
-                hide: function () {
-                    this.getElement().modal('hide');
-                }
-            };
-        }
-
-        OutputPortComponent.prototype = {
-            constructor: OutputPortComponent,
+        /**
+         * The output port component's modal.
+         */
+        this.modal = {
 
             /**
-             * Gets the component.
+             * Gets the modal element.
              *
              * @returns {*|jQuery|HTMLElement}
              */
             getElement: function () {
-                return $('#port-out-component');
+                return $('#new-port-dialog'); //Reuse the input port dialog....
             },
 
             /**
-             * Enable the component.
+             * Initialize the modal.
              */
-            enabled: function () {
-                this.getElement().attr('disabled', false);
+            init: function () {
+                //Reuse the input port dialog....
             },
 
             /**
-             * Disable the component.
-             */
-            disabled: function () {
-                this.getElement().attr('disabled', true);
-            },
-
-            /**
-             * Handler function for when component is dropped on the canvas.
+             * Updates the modal config.
              *
-             * @argument {object} pt        The point that the component was dropped.
+             * @param {string} name             The name of the property to update.
+             * @param {object|array} config     The config for the `name`.
              */
-            dropHandler: function (pt) {
-                this.promptForOutputPortName(pt);
+            update: function (name, config) {
+                this.getElement().modal(name, config);
             },
 
             /**
-             * The drag icon for the toolbox component.
-             *
-             * @param event
-             * @returns {*|jQuery|HTMLElement}
+             * Show the modal.
              */
-            dragIcon: function (event) {
-                return $('<div class="icon icon-port-out-add"></div>');
+            show: function () {
+                this.getElement().modal('show');
             },
 
             /**
-             * Prompts the user to enter the name for the output port.
-             *
-             * @argument {object} pt        The point that the output port was dropped.
+             * Hide the modal.
              */
-            promptForOutputPortName: function (pt) {
-                var outputPortComponent = this;
-                var addOutputPort = function () {
-                    // get the name of the output port and clear the textfield
-                    var portName = $('#new-port-name').val();
+            hide: function () {
+                this.getElement().modal('hide');
+            }
+        };
+    }
 
-                    // hide the dialog
-                    outputPortComponent.modal.hide();
+    OutputPortComponent.prototype = {
+        constructor: OutputPortComponent,
 
-                    // create the output port
-                    createOutputPort(portName, pt);
-                };
+        /**
+         * Gets the component.
+         *
+         * @returns {*|jQuery|HTMLElement}
+         */
+        getElement: function () {
+            return $('#port-out-component');
+        },
 
-                this.modal.update('setButtonModel', [{
-                    buttonText: 'Add',
+        /**
+         * Enable the component.
+         */
+        enabled: function () {
+            this.getElement().attr('disabled', false);
+        },
+
+        /**
+         * Disable the component.
+         */
+        disabled: function () {
+            this.getElement().attr('disabled', true);
+        },
+
+        /**
+         * Handler function for when component is dropped on the canvas.
+         *
+         * @argument {object} pt        The point that the component was dropped.
+         */
+        dropHandler: function (pt) {
+            this.promptForOutputPortName(pt);
+        },
+
+        /**
+         * The drag icon for the toolbox component.
+         *
+         * @param event
+         * @returns {*|jQuery|HTMLElement}
+         */
+        dragIcon: function (event) {
+            return $('<div class="icon icon-port-out-add"></div>');
+        },
+
+        /**
+         * Prompts the user to enter the name for the output port.
+         *
+         * @argument {object} pt        The point that the output port was dropped.
+         */
+        promptForOutputPortName: function (pt) {
+            var self = this;
+            var addOutputPort = function () {
+                // get the name of the output port and clear the textfield
+                var portName = $('#new-port-name').val();
+
+                // hide the dialog
+                self.modal.hide();
+
+                // create the output port
+                createOutputPort(portName, pt);
+            };
+
+            this.modal.update('setButtonModel', [{
+                buttonText: 'Add',
+                color: {
+                    base: '#728E9B',
+                    hover: '#004849',
+                    text: '#ffffff'
+                },
+                handler: {
+                    click: addOutputPort
+                }
+            },
+                {
+                    buttonText: 'Cancel',
                     color: {
-                        base: '#728E9B',
-                        hover: '#004849',
-                        text: '#ffffff'
+                        base: '#E3E8EB',
+                        hover: '#C7D2D7',
+                        text: '#004849'
                     },
                     handler: {
-                        click: addOutputPort
-                    }
-                },
-                    {
-                        buttonText: 'Cancel',
-                        color: {
-                            base: '#E3E8EB',
-                            hover: '#C7D2D7',
-                            text: '#004849'
-                        },
-                        handler: {
-                            click: function () {
-                                outputPortComponent.modal.hide();
-                            }
+                        click: function () {
+                            self.modal.hide();
                         }
-                    }]);
-
-                // update the port type
-                $('#new-port-type').text('Output');
-
-                // set the focus and show the dialog
-                this.modal.show();
-
-                // set up the focus and key handlers
-                $('#new-port-name').focus().off('keyup').on('keyup', function (e) {
-                    var code = e.keyCode ? e.keyCode : e.which;
-                    if (code === $.ui.keyCode.ENTER) {
-                        addOutputPort();
                     }
-                });
-            }
-        }
+                }]);
 
-        var outputPortComponent = new OutputPortComponent();
-        return outputPortComponent;
-    };
-}));
+            // update the port type
+            $('#new-port-type').text('Output');
+
+            // set the focus and show the dialog
+            this.modal.show();
+
+            // set up the focus and key handlers
+            $('#new-port-name').focus().off('keyup').on('keyup', function (e) {
+                var code = e.keyCode ? e.keyCode : e.which;
+                if (code === $.ui.keyCode.ENTER) {
+                    addOutputPort();
+                }
+            });
+        }
+    }
+
+    var outputPortComponent = new OutputPortComponent();
+    return outputPortComponent;
+};

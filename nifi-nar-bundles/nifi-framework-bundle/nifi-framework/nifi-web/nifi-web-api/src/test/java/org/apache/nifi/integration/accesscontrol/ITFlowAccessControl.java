@@ -183,21 +183,19 @@ public class ITFlowAccessControl {
      */
     @Test
     public void testGetAction() throws Exception {
-        final String uri = helper.getBaseUrl() + "/flow/history/98766";
+        final String uri = helper.getBaseUrl() + "/flow/history/1";
 
         ClientResponse response;
 
-        // the action does not exist... should return 404
+        // the action does not exist... all users should return 403
 
         // read
         response = helper.getReadUser().testGet(uri);
-        assertEquals(404, response.getStatus());
+        assertEquals(403, response.getStatus());
 
         // read/write
         response = helper.getReadWriteUser().testGet(uri);
-        assertEquals(404, response.getStatus());
-
-        // no read access should return 403
+        assertEquals(403, response.getStatus());
 
         // write
         response = helper.getWriteUser().testGet(uri);
@@ -215,27 +213,7 @@ public class ITFlowAccessControl {
      */
     @Test
     public void testGetComponentHistory() throws Exception {
-        final String uri = helper.getBaseUrl() + "/flow/history/components/my-component-id";
-
-        // will succeed due to controller level access
-
-        // read
-        ClientResponse response = helper.getReadUser().testGet(uri);
-        assertEquals(200, response.getStatus());
-
-        // read/write
-        response = helper.getReadWriteUser().testGet(uri);
-        assertEquals(200, response.getStatus());
-
-        // will be denied because component does not exist and no controller level access
-
-        // write
-        response = helper.getWriteUser().testGet(uri);
-        assertEquals(403, response.getStatus());
-
-        // none
-        response = helper.getNoneUser().testGet(uri);
-        assertEquals(403, response.getStatus());
+        testComponentSpecificGetUri(helper.getBaseUrl() + "/flow/history/components/my-component");
     }
 
     public void testComponentSpecificGetUri(final String uri) throws Exception {

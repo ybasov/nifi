@@ -17,19 +17,6 @@
 
 package org.apache.nifi.toolkit.tls.standalone;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.nifi.toolkit.tls.commandLine.BaseCommandLine;
 import org.apache.nifi.toolkit.tls.commandLine.CommandLineParseException;
@@ -42,6 +29,18 @@ import org.apache.nifi.toolkit.tls.util.PasswordUtil;
 import org.apache.nifi.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  * Command line parser for a StandaloneConfig object and a main entry point to invoke the parser and run the standalone generator
@@ -59,20 +58,8 @@ public class TlsToolkitStandaloneCommandLine extends BaseCommandLine {
     public static final String GLOBAL_PORT_SEQUENCE_ARG = "globalPortSequence";
     public static final String NIFI_DN_PREFIX_ARG = "nifiDnPrefix";
     public static final String NIFI_DN_SUFFIX_ARG = "nifiDnSuffix";
-    public static final String SUBJECT_ALTERNATIVE_NAMES = "subjectAlternativeNames";
 
-    public static final String DEFAULT_OUTPUT_DIRECTORY = calculateDefaultOutputDirectory(Paths.get("."));
-
-    protected static String calculateDefaultOutputDirectory(Path currentPath) {
-        Path currentAbsolutePath = currentPath.toAbsolutePath();
-        Path parent = currentAbsolutePath.getParent();
-        if (parent == currentAbsolutePath.getRoot()) {
-            return parent.toString();
-        } else {
-            Path currentNormalizedPath = currentAbsolutePath.normalize();
-            return "../" + currentNormalizedPath.getFileName().toString();
-        }
-    }
+    public static final String DEFAULT_OUTPUT_DIRECTORY = "../" + Paths.get(".").toAbsolutePath().normalize().getFileName().toString();
 
     public static final String DESCRIPTION = "Creates certificates and config files for nifi cluster.";
 
@@ -88,7 +75,6 @@ public class TlsToolkitStandaloneCommandLine extends BaseCommandLine {
     private boolean overwrite;
     private String dnPrefix;
     private String dnSuffix;
-    private String domainAlternativeNames;
 
     public TlsToolkitStandaloneCommandLine() {
         this(new PasswordUtil());
@@ -107,7 +93,6 @@ public class TlsToolkitStandaloneCommandLine extends BaseCommandLine {
         addOptionWithArg("B", CLIENT_CERT_PASSWORD_ARG, "Password for client certificate.  Must either be one value or one for each client DN. (autogenerate if not specified)");
         addOptionWithArg("G", GLOBAL_PORT_SEQUENCE_ARG, "Use sequential ports that are calculated for all hosts according to the provided hostname expressions. " +
                 "(Can be specified multiple times, MUST BE SAME FROM RUN TO RUN.)");
-        addOptionWithArg(null, SUBJECT_ALTERNATIVE_NAMES, "Comma-separated list of domains to use as Subject Alternative Names in the certificate");
         addOptionWithArg(null, NIFI_DN_PREFIX_ARG, "String to prepend to hostname(s) when determining DN.", TlsConfig.DEFAULT_DN_PREFIX);
         addOptionWithArg(null, NIFI_DN_SUFFIX_ARG, "String to append to hostname(s) when determining DN.", TlsConfig.DEFAULT_DN_SUFFIX);
         addOptionNoArg("O", OVERWRITE_ARG, "Overwrite existing host output.");
@@ -137,7 +122,6 @@ public class TlsToolkitStandaloneCommandLine extends BaseCommandLine {
 
         dnPrefix = commandLine.getOptionValue(NIFI_DN_PREFIX_ARG, TlsConfig.DEFAULT_DN_PREFIX);
         dnSuffix = commandLine.getOptionValue(NIFI_DN_SUFFIX_ARG, TlsConfig.DEFAULT_DN_SUFFIX);
-        domainAlternativeNames = commandLine.getOptionValue(SUBJECT_ALTERNATIVE_NAMES);
 
         Stream<String> globalOrderExpressions = null;
         if (commandLine.hasOption(GLOBAL_PORT_SEQUENCE_ARG)) {
@@ -147,10 +131,10 @@ public class TlsToolkitStandaloneCommandLine extends BaseCommandLine {
         if (commandLine.hasOption(HOSTNAMES_ARG)) {
             instanceDefinitions = Collections.unmodifiableList(
                     InstanceDefinition.createDefinitions(globalOrderExpressions,
-                            Arrays.stream(commandLine.getOptionValues(HOSTNAMES_ARG)).flatMap(s -> Arrays.stream(s.split(",")).map(String::trim)),
-                            parsePasswordSupplier(commandLine, KEY_STORE_PASSWORD_ARG, passwordUtil.passwordSupplier()),
-                            parsePasswordSupplier(commandLine, KEY_PASSWORD_ARG, commandLine.hasOption(DIFFERENT_KEY_AND_KEYSTORE_PASSWORDS_ARG) ? passwordUtil.passwordSupplier() : null),
-                            parsePasswordSupplier(commandLine, TRUST_STORE_PASSWORD_ARG, passwordUtil.passwordSupplier())));
+                    Arrays.stream(commandLine.getOptionValues(HOSTNAMES_ARG)).flatMap(s -> Arrays.stream(s.split(",")).map(String::trim)),
+                    parsePasswordSupplier(commandLine, KEY_STORE_PASSWORD_ARG, passwordUtil.passwordSupplier()),
+                    parsePasswordSupplier(commandLine, KEY_PASSWORD_ARG, commandLine.hasOption(DIFFERENT_KEY_AND_KEYSTORE_PASSWORDS_ARG) ? passwordUtil.passwordSupplier() : null),
+                    parsePasswordSupplier(commandLine, TRUST_STORE_PASSWORD_ARG, passwordUtil.passwordSupplier())));
         } else {
             instanceDefinitions = Collections.emptyList();
         }
@@ -233,7 +217,6 @@ public class TlsToolkitStandaloneCommandLine extends BaseCommandLine {
         standaloneConfig.setDays(getDays());
         standaloneConfig.setDnPrefix(dnPrefix);
         standaloneConfig.setDnSuffix(dnSuffix);
-        standaloneConfig.setDomainAlternativeNames(domainAlternativeNames);
         standaloneConfig.initDefaults();
 
         return standaloneConfig;

@@ -15,33 +15,15 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'nf.Common'],
-            function ($, nfCommon) {
-                return (nf.Client = factory($, nfCommon));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.Client =
-            factory(require('jquery'),
-                require('nf.Common')));
-    } else {
-        nf.Client =
-            factory(root.$,
-                root.nf.Common);
-    }
-}(this, function ($, nfCommon) {
-    'use strict';
-
+nf.Client = (function() {
     var clientId = null;
-
+    
     return {
         /**
          * Initializes the client.
-         *
+         * 
          * @returns deferred
          */
         init: function () {
@@ -73,7 +55,7 @@
          * @return {boolean} whether proposedData is newer than currentData
          */
         isNewerRevision: function (currentData, proposedData) {
-            if (nfCommon.isDefinedAndNotNull(currentData)) {
+            if (nf.Common.isDefinedAndNotNull(currentData)) {
                 var currentRevision = currentData.revision;
                 var proposedRevision = proposedData.revision;
 
@@ -84,4 +66,4 @@
             }
         }
     };
-}));
+}());

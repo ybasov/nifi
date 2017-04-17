@@ -17,6 +17,7 @@
 package org.apache.nifi.amqp.processors;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -26,7 +27,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.util.MockComponentLog;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -40,24 +40,31 @@ public class AMQPPublisherTest {
     @SuppressWarnings("resource")
     @Test(expected = IllegalArgumentException.class)
     public void failOnNullConnection() {
-        new AMQPPublisher(null, null);
+        new AMQPPublisher(null, null, null, null);
+    }
+
+    @SuppressWarnings("resource")
+    @Test(expected = IllegalArgumentException.class)
+    public void failOnMissingRoutingKey() throws Exception {
+        Connection conn = new TestConnection(null, null);
+        new AMQPPublisher(conn, null, "", null);
     }
 
     @Test(expected = IllegalStateException.class)
     public void failPublishIfChannelClosed() throws Exception {
         Connection conn = new TestConnection(null, null);
-        try (AMQPPublisher sender = new AMQPPublisher(conn, mock(ComponentLog.class))) {
+        try (AMQPPublisher sender = new AMQPPublisher(conn, null, "foo", null)) {
             conn.close();
-            sender.publish("oleg".getBytes(), null, "foo", "");
+            sender.publish("oleg".getBytes());
         }
     }
 
     @Test(expected = IllegalStateException.class)
     public void failPublishIfChannelFails() throws Exception {
         TestConnection conn = new TestConnection(null, null);
-        try (AMQPPublisher sender = new AMQPPublisher(conn, mock(ComponentLog.class))) {
+        try (AMQPPublisher sender = new AMQPPublisher(conn, null, "foo", null)) {
             ((TestChannel) conn.createChannel()).corruptChannel();
-            sender.publish("oleg".getBytes(), null, "foo", "");
+            sender.publish("oleg".getBytes());
         }
     }
 
@@ -70,8 +77,8 @@ public class AMQPPublisherTest {
 
         Connection connection = new TestConnection(exchangeToRoutingKeymap, routingMap);
 
-        try (AMQPPublisher sender = new AMQPPublisher(connection, mock(ComponentLog.class))) {
-            sender.publish("hello".getBytes(), null, "key1", "myExchange");
+        try (AMQPPublisher sender = new AMQPPublisher(connection, "myExchange", "key1", null)) {
+            sender.publish("hello".getBytes());
             Thread.sleep(200);
         }
 
@@ -93,8 +100,9 @@ public class AMQPPublisherTest {
         ReturnListener retListener = mock(ReturnListener.class);
         connection.createChannel().addReturnListener(retListener);
 
-        try (AMQPPublisher sender = new AMQPPublisher(connection, new MockComponentLog("foo", ""))) {
-            sender.publish("hello".getBytes(), null, "key1", "myExchange");
+        try (AMQPPublisher sender = new AMQPPublisher(connection, "myExchange", "key2",
+                new MockComponentLog("foo", ""))) {
+            sender.publish("hello".getBytes());
             Thread.sleep(1000);
         }
         Thread.sleep(200);
@@ -103,4 +111,12 @@ public class AMQPPublisherTest {
         connection.close();
     }
 
+    @Test
+    public void validateToString() throws Exception {
+        TestConnection conn = new TestConnection(null, null);
+        try (AMQPPublisher sender = new AMQPPublisher(conn, "myExchange", "key1", null)) {
+            String toString = sender.toString();
+            assertTrue(toString.contains("EXCHANGE:myExchange, ROUTING_KEY:key1"));
+        }
+    }
 }

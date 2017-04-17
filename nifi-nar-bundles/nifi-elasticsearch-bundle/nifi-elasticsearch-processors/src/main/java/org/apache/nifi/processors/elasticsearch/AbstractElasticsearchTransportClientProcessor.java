@@ -17,6 +17,9 @@
 package org.apache.nifi.processors.elasticsearch;
 
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.ValidationContext;
+import org.apache.nifi.components.ValidationResult;
+import org.apache.nifi.components.Validator;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.exception.ProcessException;
@@ -41,7 +44,28 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+
 public abstract class AbstractElasticsearchTransportClientProcessor extends AbstractElasticsearchProcessor {
+
+    /**
+     * This validator ensures the Elasticsearch hosts property is a valid list of hostname:port entries
+     */
+    private static final Validator HOSTNAME_PORT_VALIDATOR = new Validator() {
+        @Override
+        public ValidationResult validate(final String subject, final String input, final ValidationContext context) {
+            final List<String> esList = Arrays.asList(input.split(","));
+            for (String hostnamePort : esList) {
+                String[] addresses = hostnamePort.split(":");
+                // Protect against invalid input like http://127.0.0.1:9300 (URL scheme should not be there)
+                if (addresses.length != 2) {
+                    return new ValidationResult.Builder().subject(subject).input(input).explanation(
+                            "Must be in hostname:port form (no scheme such as http://").valid(false).build();
+                }
+            }
+            return new ValidationResult.Builder().subject(subject).input(input).explanation(
+                    "Valid cluster definition").valid(true).build();
+        }
+    };
 
     protected static final PropertyDescriptor CLUSTER_NAME = new PropertyDescriptor.Builder()
             .name("Cluster Name")
@@ -49,7 +73,6 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
             .required(true)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .defaultValue("elasticsearch")
-            .expressionLanguageSupported(true)
             .build();
 
     protected static final PropertyDescriptor HOSTS = new PropertyDescriptor.Builder()
@@ -59,8 +82,7 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
                     + "connect to hosts. The default transport client port is 9300.")
             .required(true)
             .expressionLanguageSupported(false)
-            .addValidator(StandardValidators.HOSTNAME_PORT_LIST_VALIDATOR)
-            .expressionLanguageSupported(true)
+            .addValidator(HOSTNAME_PORT_VALIDATOR)
             .build();
 
     public static final PropertyDescriptor PROP_SHIELD_LOCATION = new PropertyDescriptor.Builder()
@@ -71,7 +93,6 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
                     + "lib/ directory, doing so will prevent the Shield plugin from being loaded.")
             .required(false)
             .addValidator(StandardValidators.FILE_EXISTS_VALIDATOR)
-            .expressionLanguageSupported(true)
             .build();
 
     protected static final PropertyDescriptor PING_TIMEOUT = new PropertyDescriptor.Builder()
@@ -80,8 +101,7 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
                     "For example, 5s (5 seconds). If non-local recommended is 30s")
             .required(true)
             .defaultValue("5s")
-            .addValidator(StandardValidators.TIME_PERIOD_VALIDATOR)
-            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
     protected static final PropertyDescriptor SAMPLER_INTERVAL = new PropertyDescriptor.Builder()
@@ -90,8 +110,7 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
                     + "If non-local recommended is 30s.")
             .required(true)
             .defaultValue("5s")
-            .addValidator(StandardValidators.TIME_PERIOD_VALIDATOR)
-            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
     protected AtomicReference<Client> esClient = new AtomicReference<>();
@@ -116,11 +135,11 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
 
         log.debug("Creating ElasticSearch Client");
         try {
-            final String clusterName = context.getProperty(CLUSTER_NAME).evaluateAttributeExpressions().getValue();
-            final String pingTimeout = context.getProperty(PING_TIMEOUT).evaluateAttributeExpressions().getValue();
-            final String samplerInterval = context.getProperty(SAMPLER_INTERVAL).evaluateAttributeExpressions().getValue();
-            final String username = context.getProperty(USERNAME).evaluateAttributeExpressions().getValue();
-            final String password = context.getProperty(PASSWORD).evaluateAttributeExpressions().getValue();
+            final String clusterName = context.getProperty(CLUSTER_NAME).getValue();
+            final String pingTimeout = context.getProperty(PING_TIMEOUT).getValue();
+            final String samplerInterval = context.getProperty(SAMPLER_INTERVAL).getValue();
+            final String username = context.getProperty(USERNAME).getValue();
+            final String password = context.getProperty(PASSWORD).getValue();
 
             final SSLContextService sslService =
                     context.getProperty(PROP_SSL_CONTEXT_SERVICE).asControllerService(SSLContextService.class);
@@ -130,7 +149,7 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
                     .put("client.transport.ping_timeout", pingTimeout)
                     .put("client.transport.nodes_sampler_interval", samplerInterval);
 
-            String shieldUrl = context.getProperty(PROP_SHIELD_LOCATION).evaluateAttributeExpressions().getValue();
+            String shieldUrl = context.getProperty(PROP_SHIELD_LOCATION).getValue();
             if (sslService != null) {
                 settingsBuilder.put("shield.transport.ssl", "true")
                         .put("shield.ssl.keystore.path", sslService.getKeyStoreFile())
@@ -152,7 +171,7 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
 
             TransportClient transportClient = getTransportClient(settingsBuilder, shieldUrl, username, password);
 
-            final String hosts = context.getProperty(HOSTS).evaluateAttributeExpressions().getValue();
+            final String hosts = context.getProperty(HOSTS).getValue();
             esHosts = getEsHosts(hosts);
 
             if (esHosts != null) {
@@ -249,9 +268,6 @@ public abstract class AbstractElasticsearchTransportClientProcessor extends Abst
         for (String item : esList) {
 
             String[] addresses = item.split(":");
-            if (addresses.length != 2) {
-                throw new ArrayIndexOutOfBoundsException("Not in host:port format");
-            }
             final String hostName = addresses[0].trim();
             final int port = Integer.parseInt(addresses[1].trim());
 

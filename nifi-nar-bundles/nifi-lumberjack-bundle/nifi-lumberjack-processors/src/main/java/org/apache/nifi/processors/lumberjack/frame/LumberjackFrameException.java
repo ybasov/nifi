@@ -19,7 +19,6 @@ package org.apache.nifi.processors.lumberjack.frame;
 /**
  * Represents an error encountered when decoding Lumberjack frames.
  */
-@Deprecated
 public class LumberjackFrameException extends RuntimeException {
 
     public LumberjackFrameException(String message) {

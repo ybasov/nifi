@@ -18,7 +18,6 @@ package org.apache.nifi.controller.serialization;
 
 import org.apache.nifi.cluster.protocol.DataFlow;
 import org.apache.nifi.controller.FlowController;
-import org.apache.nifi.controller.MissingBundleException;
 import org.apache.nifi.controller.UninheritableFlowException;
 import org.apache.nifi.encrypt.StringEncryptor;
 
@@ -39,9 +38,8 @@ public interface FlowSynchronizer {
      * @throws FlowSerializationException if proposed flow is not a valid flow configuration file
      * @throws UninheritableFlowException if the proposed flow cannot be loaded by the controller because in doing so would risk orphaning flow files
      * @throws FlowSynchronizationException if updates to the controller failed. If this exception is thrown, then the controller should be considered unsafe to be used
-     * @throws MissingBundleException if the proposed flow cannot be loaded by the controller because it contains a bundle that is not available to the controller
      */
     void sync(FlowController controller, DataFlow dataFlow, StringEncryptor encryptor)
-            throws FlowSerializationException, UninheritableFlowException, FlowSynchronizationException, MissingBundleException;
+            throws FlowSerializationException, UninheritableFlowException, FlowSynchronizationException;
 
 }

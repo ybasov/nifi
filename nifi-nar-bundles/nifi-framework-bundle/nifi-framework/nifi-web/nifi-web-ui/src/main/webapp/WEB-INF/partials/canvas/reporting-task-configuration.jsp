@@ -27,7 +27,7 @@
                             <input type="text" id="reporting-task-name" name="reporting-task-name"/>
                             <div class="reporting-task-enabled-container">
                                 <div id="reporting-task-enabled" class="nf-checkbox checkbox-unchecked"></div>
-                                <span class="nf-checkbox-label"> Enabled</span>
+                                <span> Enabled</span>
                             </div>
                         </div>
                         <div class="reporting-task-read-only setting-field hidden">
@@ -45,10 +45,6 @@
                         <div class="setting-field">
                             <span id="reporting-task-type"></span>
                         </div>
-                    </div>
-                    <div class="setting">
-                        <div class="setting-name">Bundle</div>
-                        <div id="reporting-task-bundle" class="setting-field"></div>
                     </div>
                 </div>
                 <div class="spacer">&nbsp;</div>

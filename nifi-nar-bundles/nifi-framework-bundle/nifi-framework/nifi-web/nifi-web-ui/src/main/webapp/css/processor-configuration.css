@@ -37,12 +37,6 @@
     float: left;
 }
 
-#processor-bundle {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-
 #processor-enabled {
     width: 12px;
     height: 12px;
@@ -97,6 +91,12 @@ div.processor-relationship-container {
 #processor-configuration div.relationship-name {
     display: inline-block;
     line-height: normal;
+}
+
+div.relationship-description {
+    color: #888;
+    margin-left: 16px;
+    margin-top: 2px;
 }
 
 #run-duration-container {

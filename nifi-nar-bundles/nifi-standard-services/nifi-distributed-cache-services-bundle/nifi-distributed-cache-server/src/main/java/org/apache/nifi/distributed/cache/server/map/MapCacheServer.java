@@ -17,20 +17,17 @@
 package org.apache.nifi.distributed.cache.server.map;
 
 import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 import javax.net.ssl.SSLContext;
 
 import org.apache.nifi.distributed.cache.server.AbstractCacheServer;
 import org.apache.nifi.distributed.cache.server.EvictionPolicy;
-import org.apache.nifi.remote.StandardVersionNegotiator;
-import org.apache.nifi.remote.VersionNegotiator;
+import org.apache.nifi.stream.io.DataOutputStream;
 
 public class MapCacheServer extends AbstractCacheServer {
 
@@ -49,14 +46,6 @@ public class MapCacheServer extends AbstractCacheServer {
             persistentCache.restore();
             this.cache = persistentCache;
         }
-    }
-
-    /**
-     * Refer {@link org.apache.nifi.distributed.cache.protocol.ProtocolHandshake#initiateHandshake(InputStream, OutputStream, VersionNegotiator)}
-     * for details of each version enhancements.
-     */
-    protected StandardVersionNegotiator getVersionNegotiator() {
-        return new StandardVersionNegotiator(2, 1);
     }
 
     @Override
@@ -99,7 +88,7 @@ public class MapCacheServer extends AbstractCacheServer {
                     dos.writeInt(0);
                 } else {
                     // we didn't put. Write back the previous value
-                    final byte[] byteArray = putResult.getExisting().getValue().array();
+                    final byte[] byteArray = putResult.getExistingValue().array();
                     dos.writeInt(byteArray.length);
                     dos.write(byteArray);
                 }
@@ -110,10 +99,10 @@ public class MapCacheServer extends AbstractCacheServer {
                 final byte[] key = readValue(dis);
                 final ByteBuffer existingValue = cache.get(ByteBuffer.wrap(key));
                 if (existingValue == null) {
-                    // there was no existing value.
+                    // there was no existing value; we did a "put".
                     dos.writeInt(0);
                 } else {
-                    // a value already existed.
+                    // a value already existed. we did not update the map
                     final byte[] byteArray = existingValue.array();
                     dos.writeInt(byteArray.length);
                     dos.write(byteArray);
@@ -125,37 +114,6 @@ public class MapCacheServer extends AbstractCacheServer {
                 final byte[] key = readValue(dis);
                 final boolean removed = cache.remove(ByteBuffer.wrap(key)) != null;
                 dos.writeBoolean(removed);
-                break;
-            }
-            case "removeByPattern": {
-                final String pattern = dis.readUTF();
-                final Map<ByteBuffer, ByteBuffer> removed = cache.removeByPattern(pattern);
-                dos.writeLong(removed == null ? 0 : removed.size());
-                break;
-            }
-            case "fetch": {
-                final byte[] key = readValue(dis);
-                final MapCacheRecord existing = cache.fetch(ByteBuffer.wrap(key));
-                if (existing == null) {
-                    // there was no existing value.
-                    dos.writeLong(-1);
-                    dos.writeInt(0);
-                } else {
-                    // a value already existed.
-                    dos.writeLong(existing.getRevision());
-                    final byte[] byteArray = existing.getValue().array();
-                    dos.writeInt(byteArray.length);
-                    dos.write(byteArray);
-                }
-
-                break;
-            }
-            case "replace": {
-                final byte[] key = readValue(dis);
-                final long revision = dis.readLong();
-                final byte[] value = readValue(dis);
-                final MapPutResult result = cache.replace(new MapCacheRecord(ByteBuffer.wrap(key), ByteBuffer.wrap(value), revision));
-                dos.writeBoolean(result.isSuccessful());
                 break;
             }
             default: {

@@ -24,9 +24,12 @@ import java.net.InetSocketAddress;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,11 +53,11 @@ public abstract class NiFiProperties {
     public static final String FLOW_CONFIGURATION_ARCHIVE_DIR = "nifi.flow.configuration.archive.dir";
     public static final String FLOW_CONFIGURATION_ARCHIVE_MAX_TIME = "nifi.flow.configuration.archive.max.time";
     public static final String FLOW_CONFIGURATION_ARCHIVE_MAX_STORAGE = "nifi.flow.configuration.archive.max.storage";
-    public static final String FLOW_CONFIGURATION_ARCHIVE_MAX_COUNT = "nifi.flow.configuration.archive.max.count";
     public static final String AUTHORIZER_CONFIGURATION_FILE = "nifi.authorizer.configuration.file";
     public static final String LOGIN_IDENTITY_PROVIDER_CONFIGURATION_FILE = "nifi.login.identity.provider.configuration.file";
     public static final String REPOSITORY_DATABASE_DIRECTORY = "nifi.database.directory";
     public static final String RESTORE_DIRECTORY = "nifi.restore.directory";
+    public static final String VERSION = "nifi.version";
     public static final String WRITE_DELAY_INTERVAL = "nifi.flowservice.writedelay.interval";
     public static final String AUTO_RESUME_STATE = "nifi.flowcontroller.autoResumeState";
     public static final String FLOW_CONTROLLER_GRACEFUL_SHUTDOWN_PERIOD = "nifi.flowcontroller.graceful.shutdown.period";
@@ -137,6 +140,8 @@ public abstract class NiFiProperties {
     public static final String SECURITY_NEED_CLIENT_AUTH = "nifi.security.needClientAuth";
     public static final String SECURITY_USER_AUTHORIZER = "nifi.security.user.authorizer";
     public static final String SECURITY_USER_LOGIN_IDENTITY_PROVIDER = "nifi.security.user.login.identity.provider";
+    public static final String SECURITY_CLUSTER_AUTHORITY_PROVIDER_PORT = "nifi.security.cluster.authority.provider.port";
+    public static final String SECURITY_CLUSTER_AUTHORITY_PROVIDER_THREADS = "nifi.security.cluster.authority.provider.threads";
     public static final String SECURITY_OCSP_RESPONDER_URL = "nifi.security.ocsp.responder.url";
     public static final String SECURITY_OCSP_RESPONDER_CERTIFICATE = "nifi.security.ocsp.responder.certificate";
     public static final String SECURITY_IDENTITY_MAPPING_PATTERN_PREFIX = "nifi.security.identity.mapping.pattern.";
@@ -147,11 +152,9 @@ public abstract class NiFiProperties {
     public static final String WEB_HTTP_PORT = "nifi.web.http.port";
     public static final String WEB_HTTP_PORT_FORWARDING = "nifi.web.http.port.forwarding";
     public static final String WEB_HTTP_HOST = "nifi.web.http.host";
-    public static final String WEB_HTTP_NETWORK_INTERFACE_PREFIX = "nifi.web.http.network.interface.";
     public static final String WEB_HTTPS_PORT = "nifi.web.https.port";
     public static final String WEB_HTTPS_PORT_FORWARDING = "nifi.web.https.port.forwarding";
     public static final String WEB_HTTPS_HOST = "nifi.web.https.host";
-    public static final String WEB_HTTPS_NETWORK_INTERFACE_PREFIX = "nifi.web.https.network.interface.";
     public static final String WEB_WORKING_DIR = "nifi.web.jetty.working.directory";
     public static final String WEB_THREADS = "nifi.web.jetty.threads";
 
@@ -198,10 +201,18 @@ public abstract class NiFiProperties {
     // expression language properties
     public static final String VARIABLE_REGISTRY_PROPERTIES = "nifi.variable.registry.properties";
 
+    // build info
+    public static final String BUILD_TAG = "nifi.build.tag";
+    public static final String BUILD_BRANCH = "nifi.build.branch";
+    public static final String BUILD_REVISION = "nifi.build.revision";
+    public static final String BUILD_TIMESTAMP = "nifi.build.timestamp";
+
     // defaults
+    public static final String DEFAULT_TITLE = "NiFi";
     public static final Boolean DEFAULT_AUTO_RESUME_STATE = true;
     public static final String DEFAULT_AUTHORIZER_CONFIGURATION_FILE = "conf/authorizers.xml";
     public static final String DEFAULT_LOGIN_IDENTITY_PROVIDER_CONFIGURATION_FILE = "conf/login-identity-providers.xml";
+    public static final String DEFAULT_USER_CREDENTIAL_CACHE_DURATION = "24 hours";
     public static final Integer DEFAULT_REMOTE_INPUT_PORT = null;
     public static final Path DEFAULT_TEMPLATE_DIRECTORY = Paths.get("conf", "templates");
     public static final int DEFAULT_WEB_THREADS = 200;
@@ -598,6 +609,14 @@ public abstract class NiFiProperties {
     }
 
     // getters for ui properties //
+    /**
+     * Get the title for the UI.
+     *
+     * @return The UI title
+     */
+    public String getUiTitle() {
+        return this.getProperty(VERSION, DEFAULT_TITLE);
+    }
 
     /**
      * Get the banner text.
@@ -953,15 +972,11 @@ public abstract class NiFiProperties {
     }
 
     public String getFlowConfigurationArchiveMaxTime() {
-        return getProperty(FLOW_CONFIGURATION_ARCHIVE_MAX_TIME, null);
+        return getProperty(FLOW_CONFIGURATION_ARCHIVE_MAX_TIME, DEFAULT_FLOW_CONFIGURATION_ARCHIVE_MAX_TIME);
     }
 
     public String getFlowConfigurationArchiveMaxStorage() {
-        return getProperty(FLOW_CONFIGURATION_ARCHIVE_MAX_STORAGE, null);
-    }
-
-    public Integer getFlowConfigurationArchiveMaxCount() {
-        return getIntegerProperty(FLOW_CONFIGURATION_ARCHIVE_MAX_COUNT, null);
+        return getProperty(FLOW_CONFIGURATION_ARCHIVE_MAX_STORAGE, DEFAULT_FLOW_CONFIGURATION_ARCHIVE_MAX_STORAGE);
     }
 
     public String getVariableRegistryProperties() {
@@ -986,48 +1001,19 @@ public abstract class NiFiProperties {
         }
     }
 
-    /**
-     * Returns the network interface list to use for HTTP. This method returns a mapping of
-     * network interface property names to network interface names.
-     *
-     * @return the property name and network interface name of all HTTP network interfaces
-     */
-    public Map<String, String> getHttpNetworkInterfaces() {
-        final Map<String, String> networkInterfaces = new HashMap<>();
-
-        // go through each property
-        for (String propertyName : getPropertyKeys()) {
-            // determine if the property is a network interface name
-            if (StringUtils.startsWith(propertyName, WEB_HTTP_NETWORK_INTERFACE_PREFIX)) {
-                // get the network interface property key
-                final String key = StringUtils.substringAfter(propertyName,
-                        WEB_HTTP_NETWORK_INTERFACE_PREFIX);
-                networkInterfaces.put(key, getProperty(propertyName));
+    public Date getBuildTimestamp() {
+        String buildTimestampString = getProperty(NiFiProperties.BUILD_TIMESTAMP);
+        if (!StringUtils.isEmpty(buildTimestampString)) {
+            try {
+                SimpleDateFormat buildTimestampFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+                Date buildTimestampDate = buildTimestampFormat.parse(buildTimestampString);
+                return buildTimestampDate;
+            } catch (ParseException parseEx) {
+                return null;
             }
+        } else {
+            return null;
         }
-        return networkInterfaces;
-    }
-
-    /**
-     * Returns the network interface list to use for HTTPS. This method returns a mapping of
-     * network interface property names to network interface names.
-     *
-     * @return the property name and network interface name of all HTTPS network interfaces
-     */
-    public Map<String, String> getHttpsNetworkInterfaces() {
-        final Map<String, String> networkInterfaces = new HashMap<>();
-
-        // go through each property
-        for (String propertyName : getPropertyKeys()) {
-            // determine if the property is a network interface name
-            if (StringUtils.startsWith(propertyName, WEB_HTTPS_NETWORK_INTERFACE_PREFIX)) {
-                // get the network interface property key
-                final String key = StringUtils.substringAfter(propertyName,
-                        WEB_HTTPS_NETWORK_INTERFACE_PREFIX);
-                networkInterfaces.put(key, getProperty(propertyName));
-            }
-        }
-        return networkInterfaces;
     }
 
     public int size() {
@@ -1098,20 +1084,6 @@ public abstract class NiFiProperties {
                 return properties.stringPropertyNames();
             }
         };
-    }
-
-    /**
-     * This method is used to validate the NiFi properties when the file is loaded
-     * for the first time. The objective is to stop NiFi startup in case a property
-     * is not correctly configured and could cause issues afterwards.
-     */
-    public void validate() {
-        // REMOTE_INPUT_HOST should be a valid hostname
-        String remoteInputHost = getProperty(REMOTE_INPUT_HOST);
-        if(!StringUtils.isBlank(remoteInputHost) && remoteInputHost.split(":").length > 1) { // no scheme/port needed here (http://)
-            throw new IllegalArgumentException(remoteInputHost + " is not a correct value for " + REMOTE_INPUT_HOST + ". It should be a valid hostname without protocol or port.");
-        }
-        // Other properties to validate...
     }
 
 }

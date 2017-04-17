@@ -19,7 +19,6 @@ package org.apache.nifi.processors.hadoop;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.nifi.annotation.behavior.InputRequirement;
@@ -43,7 +42,11 @@ import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessorInitializationContext;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
-import org.apache.nifi.processor.util.StandardValidators;
+import org.apache.nifi.processors.hadoop.util.HDFSListing;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.JsonParseException;
+import org.codehaus.jackson.map.JsonMappingException;
+import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -56,7 +59,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 
 @TriggerSerially
@@ -64,7 +66,7 @@ import java.util.regex.Pattern;
 @InputRequirement(Requirement.INPUT_FORBIDDEN)
 @Tags({"hadoop", "HDFS", "get", "list", "ingest", "source", "filesystem"})
 @CapabilityDescription("Retrieves a listing of files from HDFS. For each file that is listed in HDFS, creates a FlowFile that represents "
-        + "the HDFS file so that it can be fetched in conjunction with FetchHDFS. This Processor is designed to run on Primary Node only "
+        + "the HDFS file so that it can be fetched in conjunction with ListHDFS. This Processor is designed to run on Primary Node only "
         + "in a cluster. If the primary node changes, the new Primary Node will pick up where the previous node left off without duplicating "
         + "all of the data. Unlike GetHDFS, this Processor does not delete any data from HDFS.")
 @WritesAttributes({
@@ -103,13 +105,6 @@ public class ListHDFS extends AbstractHadoopProcessor {
         .defaultValue("true")
         .build();
 
-    public static final PropertyDescriptor FILE_FILTER = new PropertyDescriptor.Builder()
-        .name("File Filter")
-        .description("Only files whose names match the given regular expression will be picked up")
-        .required(true)
-        .defaultValue("[^\\.].*")
-        .addValidator(StandardValidators.REGULAR_EXPRESSION_VALIDATOR)
-        .build();
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
         .name("success")
@@ -140,7 +135,6 @@ public class ListHDFS extends AbstractHadoopProcessor {
         props.add(DISTRIBUTED_CACHE_SERVICE);
         props.add(DIRECTORY);
         props.add(RECURSE_SUBDIRS);
-        props.add(FILE_FILTER);
         return props;
     }
 
@@ -158,10 +152,16 @@ public class ListHDFS extends AbstractHadoopProcessor {
     @Override
     public void onPropertyModified(final PropertyDescriptor descriptor, final String oldValue, final String newValue) {
         super.onPropertyModified(descriptor, oldValue, newValue);
-        if (isConfigurationRestored() && (descriptor.equals(DIRECTORY) || descriptor.equals(FILE_FILTER))) {
+        if (isConfigurationRestored() && descriptor.equals(DIRECTORY)) {
             latestTimestampEmitted = -1L;
             latestTimestampListed = -1L;
         }
+    }
+
+    private HDFSListing deserialize(final String serializedState) throws JsonParseException, JsonMappingException, IOException {
+        final ObjectMapper mapper = new ObjectMapper();
+        final JsonNode jsonNode = mapper.readTree(serializedState);
+        return mapper.readValue(jsonNode, HDFSListing.class);
     }
 
     /**
@@ -283,7 +283,7 @@ public class ListHDFS extends AbstractHadoopProcessor {
         final Set<FileStatus> statuses;
         try {
             final Path rootPath = new Path(directory);
-            statuses = getStatuses(rootPath, recursive, hdfs, createPathFilter(context));
+            statuses = getStatuses(rootPath, recursive, hdfs);
             getLogger().debug("Found a total of {} files in HDFS", new Object[] {statuses.size()});
         } catch (final IOException | IllegalArgumentException e) {
             getLogger().error("Failed to perform listing of HDFS due to {}", new Object[] {e});
@@ -326,17 +326,17 @@ public class ListHDFS extends AbstractHadoopProcessor {
         }
     }
 
-    private Set<FileStatus> getStatuses(final Path path, final boolean recursive, final FileSystem hdfs, final PathFilter filter) throws IOException {
+    private Set<FileStatus> getStatuses(final Path path, final boolean recursive, final FileSystem hdfs) throws IOException {
         final Set<FileStatus> statusSet = new HashSet<>();
 
         getLogger().debug("Fetching listing for {}", new Object[] {path});
-        final FileStatus[] statuses = hdfs.listStatus(path, filter);
+        final FileStatus[] statuses = hdfs.listStatus(path);
 
         for ( final FileStatus status : statuses ) {
             if ( status.isDirectory() ) {
                 if ( recursive ) {
                     try {
-                        statusSet.addAll(getStatuses(status.getPath(), recursive, hdfs, filter));
+                        statusSet.addAll(getStatuses(status.getPath(), recursive, hdfs));
                     } catch (final IOException ioe) {
                         getLogger().error("Failed to retrieve HDFS listing for subdirectory {} due to {}; will continue listing others", new Object[] {status.getPath(), ioe});
                     }
@@ -393,15 +393,5 @@ public class ListHDFS extends AbstractHadoopProcessor {
         }
 
         return sb.toString();
-    }
-
-    private PathFilter createPathFilter(final ProcessContext context) {
-        final Pattern filePattern = Pattern.compile(context.getProperty(FILE_FILTER).getValue());
-        return new PathFilter() {
-            @Override
-            public boolean accept(Path path) {
-                return filePattern.matcher(path.getName()).matches();
-            }
-        };
     }
 }

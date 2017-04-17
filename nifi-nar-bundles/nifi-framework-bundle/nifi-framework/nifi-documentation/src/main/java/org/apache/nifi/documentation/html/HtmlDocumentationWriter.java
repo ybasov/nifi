@@ -91,17 +91,11 @@ public class HtmlDocumentationWriter implements DocumentationWriter {
 
         xmlStreamWriter.writeStartElement("link");
         xmlStreamWriter.writeAttribute("rel", "stylesheet");
-        xmlStreamWriter.writeAttribute("href", "/nifi-docs/css/component-usage.css");
+        xmlStreamWriter.writeAttribute("href", "../../css/component-usage.css");
         xmlStreamWriter.writeAttribute("type", "text/css");
         xmlStreamWriter.writeEndElement();
-        xmlStreamWriter.writeEndElement();
 
-        xmlStreamWriter.writeStartElement("script");
-        xmlStreamWriter.writeAttribute("type", "text/javascript");
-        xmlStreamWriter.writeCharacters("window.onload = function(){if(self==top) { " +
-                "document.getElementById('nameHeader').style.display = \"inherit\"; } }" );
         xmlStreamWriter.writeEndElement();
-
     }
 
     /**
@@ -129,7 +123,6 @@ public class HtmlDocumentationWriter implements DocumentationWriter {
             final XMLStreamWriter xmlStreamWriter, final boolean hasAdditionalDetails)
             throws XMLStreamException {
         xmlStreamWriter.writeStartElement("body");
-        writeHeader(configurableComponent, xmlStreamWriter);
         writeDescription(configurableComponent, xmlStreamWriter, hasAdditionalDetails);
         writeTags(configurableComponent, xmlStreamWriter);
         writeProperties(configurableComponent, xmlStreamWriter);
@@ -138,23 +131,6 @@ public class HtmlDocumentationWriter implements DocumentationWriter {
         writeStatefulInfo(configurableComponent, xmlStreamWriter);
         writeRestrictedInfo(configurableComponent, xmlStreamWriter);
         writeSeeAlso(configurableComponent, xmlStreamWriter);
-        xmlStreamWriter.writeEndElement();
-    }
-
-    /**
-     * Write the header to be displayed when loaded outside an iframe.
-     *
-     * @param configurableComponent the component to describe
-     * @param xmlStreamWriter the stream writer to use
-     * @throws XMLStreamException thrown if there was a problem writing the XML
-     */
-    private void writeHeader(ConfigurableComponent configurableComponent, XMLStreamWriter xmlStreamWriter)
-            throws XMLStreamException {
-        xmlStreamWriter.writeStartElement("h1");
-        xmlStreamWriter.writeAttribute("id", "nameHeader");
-        // Style will be overwritten on load if needed
-        xmlStreamWriter.writeAttribute("style", "display: none;");
-        xmlStreamWriter.writeCharacters(getTitle(configurableComponent));
         xmlStreamWriter.writeEndElement();
     }
 
@@ -186,7 +162,7 @@ public class HtmlDocumentationWriter implements DocumentationWriter {
 
             xmlStreamWriter.writeEndElement();
         } else {
-            xmlStreamWriter.writeCharacters("This component does not store state.");
+            xmlStreamWriter.writeCharacters("This processor has no state management.");
         }
     }
 
@@ -204,9 +180,7 @@ public class HtmlDocumentationWriter implements DocumentationWriter {
         writeSimpleElement(xmlStreamWriter, "h3", "Restricted: ");
 
         if(restricted != null) {
-            xmlStreamWriter.writeCharacters(restricted.value());
-        } else {
-            xmlStreamWriter.writeCharacters("This component is not restricted.");
+            writeSimpleElement(xmlStreamWriter, "td", restricted.value());
         }
     }
 
@@ -366,7 +340,7 @@ public class HtmlDocumentationWriter implements DocumentationWriter {
                     xmlStreamWriter.writeCharacters(", ");
                 }
                 xmlStreamWriter.writeCharacters("whether a property supports the ");
-                writeLink(xmlStreamWriter, "NiFi Expression Language", "/nifi-docs/html/expression-language-guide.html");
+                writeLink(xmlStreamWriter, "NiFi Expression Language", "../../html/expression-language-guide.html");
             }
             if (containsSensitiveProperties) {
                 xmlStreamWriter.writeCharacters(", and whether a property is considered " + "\"sensitive\", meaning that its value will be encrypted. Before entering a "
@@ -524,7 +498,7 @@ public class HtmlDocumentationWriter implements DocumentationWriter {
             throws XMLStreamException {
         xmlStreamWriter.writeCharacters(" ");
         xmlStreamWriter.writeStartElement("img");
-        xmlStreamWriter.writeAttribute("src", "/nifi-docs/html/images/iconInfo.png");
+        xmlStreamWriter.writeAttribute("src", "../../html/images/iconInfo.png");
         xmlStreamWriter.writeAttribute("alt", description);
         xmlStreamWriter.writeAttribute("title", description);
         xmlStreamWriter.writeEndElement();

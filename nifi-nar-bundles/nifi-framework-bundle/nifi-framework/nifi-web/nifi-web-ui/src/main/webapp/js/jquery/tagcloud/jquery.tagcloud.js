@@ -59,22 +59,38 @@
      * Adds the specified tag filter.
      *
      * @argument {jQuery} cloudContainer    The tag cloud container
-     * @argument {jQuery} tag               The tag to add
+     * @argument {string} tag               The tag to add
      */
     var addTagFilter = function (cloudContainer, tag) {
         var config = cloudContainer.data('options');
+        var tagFilter = cloudContainer.find('ul.tag-filter');
 
-        if (tag.hasClass('selected')) {
-            // unselect
-            tag.removeClass('selected');
-
-            // fire a remove event if applicable
-            if (isDefinedAndNotNull(config.remove)) {
-                config.remove.call(cloudContainer, tag);
+        // ensure this tag hasn't already been added
+        var tagFilterExists = false;
+        tagFilter.find('li div.selected-tag-text').each(function () {
+            if (tag === $(this).text()) {
+                tagFilterExists = true;
+                return false;
             }
-        } else {
-            // select
-            tag.addClass('selected');
+        });
+
+        // add this tag filter if applicable
+        if (!tagFilterExists) {
+            // create the list item content
+            var tagText = $('<div class="selected-tag-text"></div>').text(tag);
+            var removeTagIcon = $('<div class="fa fa-close remove-selected-tag pointer"></div>').click(function () {
+                // remove this tag
+                $(this).closest('li').remove();
+
+                // fire a remove event if applicable
+                if (isDefinedAndNotNull(config.remove)) {
+                    config.remove.call(cloudContainer, tag);
+                }
+            });
+            var selectedTagItem = $('<div layout="row" layout-align="space-between center"></div>').append(tagText).append(removeTagIcon);
+
+            // create the list item and update the tag filter list
+            $('<li></li>').append(selectedTagItem).appendTo(tagFilter);
 
             // fire a select event if applicable
             if (isDefinedAndNotNull(config.select)) {
@@ -102,6 +118,7 @@
 
                     // build the component
                     var cloud = $('<ul class="tag-cloud"></ul>').appendTo(cloudContainer);
+                    var filter = $('<ul class="tag-filter"></ul>').appendTo(cloudContainer);
 
                     var tagCloud = {};
                     var tags = [];
@@ -110,7 +127,7 @@
                     $.each(options.tags, function (i, tag) {
                         var normalizedTagName = tag.toLowerCase();
 
-                        if (isDefinedAndNotNull(tagCloud[normalizedTagName])) {
+                        if (nf.Common.isDefinedAndNotNull(tagCloud[normalizedTagName])) {
                             tagCloud[normalizedTagName].count = tagCloud[normalizedTagName].count + 1;
                         } else {
                             var tagCloudEntry = {
@@ -156,8 +173,11 @@
                             })).css({
                                 'min-width': minWidth + 'px'
                             }).click(function () {
-                                var tag = $(this).children('span');
-                                addTagFilter(cloudContainer, tag);
+                                // ensure we don't exceed 5 selected
+                                if (filter.children('li').length < 5) {
+                                    var tagText = $(this).children('span').text();
+                                    addTagFilter(cloudContainer, tagText);
+                                }
                             }).appendTo(cloud).ellipsis();
                         });
                     } else {
@@ -186,7 +206,7 @@
 
             this.each(function () {
                 var cloudContainer = $(this);
-                cloudContainer.find('span.link.selected').each(function () {
+                cloudContainer.find('div.selected-tag-text').each(function () {
                     tags.push($(this).text());
                 });
             });

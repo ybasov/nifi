@@ -86,7 +86,7 @@ public class TestClassLoaderUtils {
     @Test
     public void testGetURLsForClasspathWithDirectory() throws MalformedURLException {
         final String jarFilePath = "src/test/resources/TestClassLoaderUtils";
-        URL[] urls = ClassLoaderUtils.getURLsForClasspath(jarFilePath, getJarFilenameFilter(), false);
+        URL[] urls = ClassLoaderUtils.getURLsForClasspath(jarFilePath, null, false);
         assertEquals(2, urls.length);
     }
 

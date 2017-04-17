@@ -25,7 +25,7 @@ import com.wordnik.swagger.annotations.Authorization;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.authorization.AuthorizeControllerServiceReference;
 import org.apache.nifi.authorization.Authorizer;
-import org.apache.nifi.authorization.ComponentAuthorizable;
+import org.apache.nifi.authorization.ConfigurableComponentAuthorizable;
 import org.apache.nifi.authorization.RequestAction;
 import org.apache.nifi.authorization.resource.Authorizable;
 import org.apache.nifi.authorization.user.NiFiUserUtils;
@@ -36,7 +36,6 @@ import org.apache.nifi.ui.extension.UiExtensionMapping;
 import org.apache.nifi.web.NiFiServiceFacade;
 import org.apache.nifi.web.Revision;
 import org.apache.nifi.web.UiExtensionType;
-import org.apache.nifi.web.api.dto.BundleDTO;
 import org.apache.nifi.web.api.dto.ComponentStateDTO;
 import org.apache.nifi.web.api.dto.ControllerServiceDTO;
 import org.apache.nifi.web.api.dto.PropertyDescriptorDTO;
@@ -125,12 +124,10 @@ public class ControllerServiceResource extends ApplicationResource {
      * Populates the uri for the specified controller service.
      */
     public ControllerServiceDTO populateRemainingControllerServiceContent(final ControllerServiceDTO controllerService) {
-        final BundleDTO bundle = controllerService.getBundle();
-
         // see if this processor has any ui extensions
         final UiExtensionMapping uiExtensionMapping = (UiExtensionMapping) servletContext.getAttribute("nifi-ui-extensions");
-        if (uiExtensionMapping.hasUiExtension(controllerService.getType(), bundle.getGroup(), bundle.getArtifact(), bundle.getVersion())) {
-            final List<UiExtension> uiExtensions = uiExtensionMapping.getUiExtension(controllerService.getType(), bundle.getGroup(), bundle.getArtifact(), bundle.getVersion());
+        if (uiExtensionMapping.hasUiExtension(controllerService.getType())) {
+            final List<UiExtension> uiExtensions = uiExtensionMapping.getUiExtension(controllerService.getType());
             for (final UiExtension uiExtension : uiExtensions) {
                 if (UiExtensionType.ControllerServiceConfiguration.equals(uiExtension.getExtensionType())) {
                     controllerService.setCustomUiUrl(uiExtension.getContextPath() + "/configure");
@@ -624,7 +621,7 @@ public class ControllerServiceResource extends ApplicationResource {
                 requestRevision,
                 lookup -> {
                     // authorize the service
-                    final ComponentAuthorizable authorizable = lookup.getControllerService(id);
+                    final ConfigurableComponentAuthorizable authorizable = lookup.getControllerService(id);
                     authorizable.getAuthorizable().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
 
                     // authorize any referenced services
@@ -664,8 +661,6 @@ public class ControllerServiceResource extends ApplicationResource {
             response = ControllerServiceEntity.class,
             authorizations = {
                     @Authorization(value = "Write - /controller-services/{uuid}", type = ""),
-                    @Authorization(value = "Write - Parent Process Group if scoped by Process Group - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Write - Controller if scoped by Controller - /controller", type = ""),
                     @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}", type = "")
             }
     )
@@ -710,13 +705,8 @@ public class ControllerServiceResource extends ApplicationResource {
                 requestControllerServiceEntity,
                 requestRevision,
                 lookup -> {
-                    final ComponentAuthorizable controllerService = lookup.getControllerService(id);
-
-                    // ensure write permission to the controller service
+                    final ConfigurableComponentAuthorizable controllerService = lookup.getControllerService(id);
                     controllerService.getAuthorizable().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
-
-                    // ensure write permission to the parent process group
-                    controllerService.getAuthorizable().getParentAuthorizable().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
 
                     // verify any referenced services
                     AuthorizeControllerServiceReference.authorizeControllerServiceReferences(controllerService, authorizer, lookup, false);

@@ -43,8 +43,5 @@ public class InvalidPreparedQuery implements PreparedQuery {
         throw new AttributeExpressionLanguageException("Invalid Expression: " + query + " due to " + explanation);
     }
 
-    @Override
-    public String evaluateExpressions( Map<String, String> valueLookup, AttributeValueDecorator decorator, Map<String, String> stateVariables) throws ProcessException {
-        throw new AttributeExpressionLanguageException("Invalid Expression: " + query + " due to " + explanation);
-    }
+
 }

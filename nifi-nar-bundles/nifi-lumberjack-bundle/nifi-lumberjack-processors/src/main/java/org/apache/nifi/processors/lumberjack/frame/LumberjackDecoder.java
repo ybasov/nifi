@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
  * Decodes a Lumberjack frame by maintaining a state based on each byte that has been processed. This class
  * should not be shared by multiple threads.
  */
-@Deprecated
 public class LumberjackDecoder {
 
     static final Logger logger = LoggerFactory.getLogger(LumberjackDecoder.class);
@@ -162,7 +161,7 @@ public class LumberjackDecoder {
 
         // Lumberjack has a weird approach to frames, where compressed frames embed D(ata) or J(SON) frames.
         // inside a compressed input.
-        //  Or as stated in the documentation:
+        //  Or astated in the documentation:
         //
         // "As an example, you could have 3 data frames compressed into a single
         // 'compressed' frame type: 1D{k,v}{k,v}1D{k,v}{k,v}1D{k,v}{k,v}"

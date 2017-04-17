@@ -21,20 +21,18 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Date;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TopDocs;
-import org.apache.nifi.authorization.AccessDeniedException;
 import org.apache.nifi.authorization.user.NiFiUser;
 import org.apache.nifi.provenance.PersistentProvenanceRepository;
 import org.apache.nifi.provenance.ProvenanceEventRecord;
 import org.apache.nifi.provenance.StandardQueryResult;
-import org.apache.nifi.provenance.authorization.EventAuthorizer;
-import org.apache.nifi.provenance.index.EventIndexSearcher;
+import org.apache.nifi.provenance.authorization.AuthorizationCheck;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,14 +86,14 @@ public class IndexSearch {
         final Query luceneQuery = LuceneUtil.convertQuery(provenanceQuery);
 
         final long start = System.nanoTime();
-        EventIndexSearcher searcher = null;
+        IndexSearcher searcher = null;
         try {
             searcher = indexManager.borrowIndexSearcher(indexDirectory);
             final long searchStartNanos = System.nanoTime();
             final long openSearcherNanos = searchStartNanos - start;
 
             logger.debug("Searching {} for {}", this, provenanceQuery);
-            final TopDocs topDocs = searcher.getIndexSearcher().search(luceneQuery, provenanceQuery.getMaxResults());
+            final TopDocs topDocs = searcher.search(luceneQuery, provenanceQuery.getMaxResults());
             final long finishSearch = System.nanoTime();
             final long searchNanos = finishSearch - searchStartNanos;
 
@@ -109,29 +107,9 @@ public class IndexSearch {
 
             final DocsReader docsReader = new DocsReader();
 
-            final EventAuthorizer authorizer = new EventAuthorizer() {
-                @Override
-                public boolean isAuthorized(ProvenanceEventRecord event) {
-                    return repository.isAuthorized(event, user);
-                }
+            final AuthorizationCheck authCheck = event -> repository.isAuthorized(event, user);
 
-                @Override
-                public void authorize(ProvenanceEventRecord event) throws AccessDeniedException {
-                    repository.authorize(event, user);
-                }
-
-                @Override
-                public List<ProvenanceEventRecord> filterUnauthorizedEvents(List<ProvenanceEventRecord> events) {
-                    return repository.filterUnauthorizedEvents(events, user);
-                }
-
-                @Override
-                public Set<ProvenanceEventRecord> replaceUnauthorizedWithPlaceholders(Set<ProvenanceEventRecord> events) {
-                    return repository.replaceUnauthorizedWithPlaceholders(events, user);
-                }
-            };
-
-            matchingRecords = docsReader.read(topDocs, authorizer, searcher.getIndexSearcher().getIndexReader(), repository.getAllLogFiles(), retrievedCount,
+            matchingRecords = docsReader.read(topDocs, authCheck, searcher.getIndexReader(), repository.getAllLogFiles(), retrievedCount,
                 provenanceQuery.getMaxResults(), maxAttributeChars);
 
             final long readRecordsNanos = System.nanoTime() - finishSearch;
@@ -155,7 +133,7 @@ public class IndexSearch {
             return sqr;
         } finally {
             if ( searcher != null ) {
-                indexManager.returnIndexSearcher(searcher);
+                indexManager.returnIndexSearcher(indexDirectory, searcher);
             }
         }
     }

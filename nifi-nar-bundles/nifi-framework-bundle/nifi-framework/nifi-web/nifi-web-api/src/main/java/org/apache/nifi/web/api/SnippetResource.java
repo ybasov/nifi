@@ -301,8 +301,7 @@ public class SnippetResource extends ApplicationResource {
             value = "Deletes the components in a snippet and discards the snippet",
             response = SnippetEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /{component-type}/{uuid} - For each component in the Snippet and their descendant components", type = ""),
-                    @Authorization(value = "Write - Parent Process Group - /process-groups/{uuid}", type = ""),
+                    @Authorization(value = "Write - /{component-type}/{uuid} - For each component in the Snippet and their descendant components", type = "")
             }
     )
     @ApiResponses(
@@ -339,9 +338,6 @@ public class SnippetResource extends ApplicationResource {
                     // ensure write permission to every component in the snippet excluding referenced services
                     final SnippetAuthorizable snippet = lookup.getSnippet(snippetId);
                     authorizeSnippet(snippet, authorizer, lookup, RequestAction.WRITE, true, false);
-
-                    // ensure write permission to the parent process group
-                    snippet.getParentProcessGroup().authorize(authorizer, RequestAction.WRITE, NiFiUserUtils.getNiFiUser());
                 },
                 () -> serviceFacade.verifyDeleteSnippet(snippetId, requestRevisions.stream().map(rev -> rev.getComponentId()).collect(Collectors.toSet())),
                 (revisions, entity) -> {

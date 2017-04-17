@@ -15,31 +15,12 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf */
 
 /**
  * Handles the upstream/downstream dialogs.
  */
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['jquery',
-                'nf.ErrorHandler',
-                'nf.CanvasUtils'],
-            function ($, nfErrorHandler, nfCanvasUtils) {
-                return (nf.GoTo = factory($, nfErrorHandler, nfCanvasUtils));
-            });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.GoTo =
-            factory(require('jquery'),
-                require('nf.ErrorHandler'),
-                require('nf.CanvasUtils')));
-    } else {
-        nf.GoTo = factory(root.$,
-            root.nf.ErrorHandler,
-            root.nf.CanvasUtils);
-    }
-}(this, function ($, nfErrorHandler, nfCanvasUtils) {
-    'use strict';
+nf.GoTo = (function () {
 
     var config = {
         urls: {
@@ -76,7 +57,7 @@
         var connectionStyle = 'unset';
         var connectionName = 'Connection';
         if (connectionEntity.permissions.canRead === true) {
-            var formattedConnectionName = nfCanvasUtils.formatConnectionName(connectionEntity.component);
+            var formattedConnectionName = nf.CanvasUtils.formatConnectionName(connectionEntity.component);
             if (formattedConnectionName !== '') {
                 connectionStyle = '';
                 connectionName = formattedConnectionName;
@@ -87,7 +68,7 @@
         $('<div class="search-result-icon icon-connect"></div>').appendTo(connectionEntry);
         $('<div class="connection-entry-name go-to-link"></div>').attr('title', connectionName).addClass(connectionStyle).text(connectionName).on('click', function () {
             // go to the connection
-            nfCanvasUtils.showComponent(parentProcessGroupId, connectionEntity.id);
+            nf.CanvasUtils.showComponent(parentProcessGroupId, connectionEntity.id);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -136,7 +117,7 @@
         $('<div class="search-result-icon"></div>').addClass(smallIconClass).appendTo(downstreamComponent);
         $('<div class="destination-component-name go-to-link"></div>').attr('title', destinationName).text(destinationName).on('click', function () {
             // go to the component
-            nfCanvasUtils.showComponent(connectionEntity.destinationGroupId, connectionEntity.destinationId);
+            nf.CanvasUtils.showComponent(connectionEntity.destinationGroupId, connectionEntity.destinationId);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -171,7 +152,7 @@
         $('<div class="search-result-icon icon-group"></div>').appendTo(downstreamComponent);
         $('<div class="destination-component-name go-to-link"></div>').attr('title', groupLabel).text(groupLabel).on('click', function () {
             // go to the remote process group
-            nfCanvasUtils.showComponent(parentProcessGroupId, processGroupEntity.id);
+            nf.CanvasUtils.showComponent(parentProcessGroupId, processGroupEntity.id);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -193,7 +174,7 @@
         $('<div class="search-result-icon icon-port-in"></div>').appendTo(downstreamInputPort);
         $('<div class="destination-input-port-name go-to-link"></div>').attr('title', portLabel).text(portLabel).on('click', function () {
             // go to the remote process group
-            nfCanvasUtils.showComponent(connectionEntity.destinationGroupId, connectionEntity.destinationId);
+            nf.CanvasUtils.showComponent(connectionEntity.destinationGroupId, connectionEntity.destinationId);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -228,7 +209,7 @@
         $('<div class="search-result-icon icon-group-remote"></div>').appendTo(downstreamComponent);
         $('<div class="destination-component-name go-to-link"></div>').attr('title', remoteGroupLabel).text(remoteGroupLabel).on('click', function () {
             // go to the remote process group
-            nfCanvasUtils.showComponent(parentProcessGroupId, remoteProcessGroupEntity.id);
+            nf.CanvasUtils.showComponent(parentProcessGroupId, remoteProcessGroupEntity.id);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -282,7 +263,7 @@
         $('<div class="search-result-icon"></div>').addClass(smallIconClass).appendTo(sourceComponent);
         $('<div class="source-component-name go-to-link"></div>').attr('title', sourceName).text(sourceName).on('click', function () {
             // go to the component
-            nfCanvasUtils.showComponent(connectionEntity.sourceGroupId, connectionEntity.sourceId);
+            nf.CanvasUtils.showComponent(connectionEntity.sourceGroupId, connectionEntity.sourceId);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -317,7 +298,7 @@
         $('<div class="search-result-icon icon-group"></div>').appendTo(sourceComponent);
         $('<div class="source-component-name go-to-link"></div>').attr('title', groupLabel).text(groupLabel).on('click', function () {
             // go to the process group
-            nfCanvasUtils.showComponent(parentProcessGroupId, processGroupEntity.id);
+            nf.CanvasUtils.showComponent(parentProcessGroupId, processGroupEntity.id);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -338,7 +319,7 @@
         $('<div class="search-result-icon icon-port-out"></div>').appendTo(sourceOutputPort);
         $('<div class="source-output-port-name go-to-link"></div>').attr('title', portLabel).text(portLabel).on('click', function () {
             // go to the output port
-            nfCanvasUtils.showComponent(connectionEntity.sourceGroupId, connectionEntity.sourceId);
+            nf.CanvasUtils.showComponent(connectionEntity.sourceGroupId, connectionEntity.sourceId);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -373,7 +354,7 @@
         $('<div class="search-result-icon icon-group-remote"></div>').appendTo(sourceComponent);
         $('<div class="source-component-name go-to-link"></div>').attr('title', remoteGroupLabel).text(remoteGroupLabel).on('click', function () {
             // go to the remote process group
-            nfCanvasUtils.showComponent(parentProcessGroupId, remoteProcessGroupEntity.id);
+            nf.CanvasUtils.showComponent(parentProcessGroupId, remoteProcessGroupEntity.id);
 
             // close the dialog
             $('#connections-dialog').modal('hide');
@@ -451,9 +432,9 @@
          */
         showDownstreamFromProcessor: function (selection) {
             var processorEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             var processorLabel = getDisplayName(processorEntity);
 
@@ -471,7 +452,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the source
                 if (connectionEntity.sourceId === processorEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -491,9 +472,9 @@
          */
         showUpstreamFromProcessor: function (selection) {
             var processorEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             var processorLabel = getDisplayName(processorEntity);
 
@@ -511,7 +492,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the destination
                 if (connectionEntity.destinationId === processorEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -531,12 +512,12 @@
          */
         showDownstreamFromGroup: function (selection) {
             var groupEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             var iconStyle = 'icon-group';
-            if (nfCanvasUtils.isRemoteProcessGroup(selection)) {
+            if (nf.CanvasUtils.isRemoteProcessGroup(selection)) {
                 iconStyle = 'icon-group-remote';
             }
 
@@ -556,7 +537,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the source
                 if (connectionEntity.sourceGroupId === groupEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -576,12 +557,12 @@
          */
         showUpstreamFromGroup: function (selection) {
             var groupEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             var iconStyle = 'icon-group';
-            if (nfCanvasUtils.isRemoteProcessGroup(selection)) {
+            if (nf.CanvasUtils.isRemoteProcessGroup(selection)) {
                 iconStyle = 'icon-group-remote';
             }
 
@@ -601,7 +582,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the destination
                 if (connectionEntity.destinationGroupId === groupEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -621,9 +602,9 @@
          */
         showDownstreamFromInputPort: function (selection) {
             var portEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             var portLabel = getDisplayName(portEntity);
 
@@ -641,7 +622,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the source
                 if (connectionEntity.sourceId === portEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -664,7 +645,7 @@
 
             $.ajax({
                 type: 'GET',
-                url: config.urls.processGroups + encodeURIComponent(nfCanvasUtils.getParentGroupId()),
+                url: config.urls.processGroups + encodeURIComponent(nf.Canvas.getParentGroupId()),
                 dataType: 'json'
             }).done(function (response) {
                 var flow = response.processGroupFlow.flow;
@@ -681,7 +662,7 @@
                 // populate the upstream dialog
                 $('#connections-context')
                     .append('<div class="search-result-icon icon-group"></div>')
-                    .append($('<div class="connections-component-name"></div>').text(nfCanvasUtils.getGroupName()))
+                    .append($('<div class="connections-component-name"></div>').text(nf.Canvas.getGroupName()))
                     .append('<div class="clear"></div>')
                     .append('<div class="search-result-icon icon-port-in" style="margin-left: 20px;"></div>')
                     .append($('<div class="connections-component-name"></div>').text(portLabel))
@@ -691,7 +672,7 @@
                 $.each(connections, function (_, connectionEntity) {
                     // only show connections for which this selection is the destination
                     if (connectionEntity.destinationId === portEntity.id) {
-                        addConnection(nfCanvasUtils.getParentGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                        addConnection(nf.Canvas.getParentGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                     }
                 });
 
@@ -702,7 +683,7 @@
 
                 // show the upstream dialog
                 $('#connections-dialog').modal('setHeaderText', 'Upstream Connections').modal('show');
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         },
 
         /**
@@ -715,7 +696,7 @@
 
             $.ajax({
                 type: 'GET',
-                url: config.urls.processGroups + encodeURIComponent(nfCanvasUtils.getParentGroupId()),
+                url: config.urls.processGroups + encodeURIComponent(nf.Canvas.getParentGroupId()),
                 dataType: 'json'
             }).done(function (response) {
                 var flow = response.processGroupFlow.flow;
@@ -732,7 +713,7 @@
                 // populate the downstream dialog
                 $('#connections-context')
                     .append('<div class="search-result-icon icon-group"></div>')
-                    .append($('<div class="connections-component-name"></div>').text(nfCanvasUtils.getGroupName()))
+                    .append($('<div class="connections-component-name"></div>').text(nf.Canvas.getGroupName()))
                     .append('<div class="clear"></div>')
                     .append('<div class="search-result-icon icon-port-out" style="margin-left: 20px;"></div>')
                     .append($('<div class="connections-component-name"></div>').text(portLabel))
@@ -742,7 +723,7 @@
                 $.each(connections, function (_, connectionEntity) {
                     // only show connections for which this selection is the source
                     if (connectionEntity.sourceId === portEntity.id) {
-                        addConnection(nfCanvasUtils.getParentGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                        addConnection(nf.Canvas.getParentGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                     }
                 });
 
@@ -753,7 +734,7 @@
 
                 // show the downstream dialog
                 $('#connections-dialog').modal('setHeaderText', 'Downstream Connections').modal('show');
-            }).fail(nfErrorHandler.handleAjaxError);
+            }).fail(nf.Common.handleAjaxError);
         },
 
         /**
@@ -763,9 +744,9 @@
          */
         showUpstreamFromOutputPort: function (selection) {
             var portEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             var portLabel = getDisplayName(portEntity);
             
@@ -783,7 +764,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the destination
                 if (connectionEntity.destinationId === portEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -803,9 +784,9 @@
          */
         showDownstreamFromFunnel: function (selection) {
             var funnelEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             // record details of the current component
             currentComponentId = funnelEntity.id;
@@ -821,7 +802,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the source
                 if (connectionEntity.sourceId === funnelEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -841,9 +822,9 @@
          */
         showUpstreamFromFunnel: function (selection) {
             var funnelEntity = selection.datum();
-            var connections = nfCanvasUtils.getComponentByType('Connection').get();
-            var processGroups = nfCanvasUtils.getComponentByType('ProcessGroup').get();
-            var remoteProcessGroups = nfCanvasUtils.getComponentByType('RemoteProcessGroup').get();
+            var connections = nf.Connection.get();
+            var processGroups = nf.ProcessGroup.get();
+            var remoteProcessGroups = nf.RemoteProcessGroup.get();
 
             // record details of the current component
             currentComponentId = funnelEntity.id;
@@ -859,7 +840,7 @@
             $.each(connections, function (_, connectionEntity) {
                 // only show connections for which this selection is the destination
                 if (connectionEntity.destinationId === funnelEntity.id) {
-                    addConnection(nfCanvasUtils.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
+                    addConnection(nf.Canvas.getGroupId(), connectionEntity, processGroups, remoteProcessGroups);
                 }
             });
 
@@ -872,4 +853,4 @@
             $('#connections-dialog').modal('setHeaderText', 'Upstream Connections').modal('show');
         }
     };
-}));
+}());

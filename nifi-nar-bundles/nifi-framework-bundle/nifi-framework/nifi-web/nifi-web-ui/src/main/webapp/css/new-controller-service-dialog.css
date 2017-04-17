@@ -22,12 +22,18 @@
 #new-controller-service-dialog {
     min-height:620px;
     height: 620px;
-    width: 800px;
+    width: 760px;
     min-width: 760px;
 }
 
-#controller-service-bundle-group-combo {
-    margin-right: 2px;
+#new-controller-service-dialog span.link {
+    cursor: pointer;
+    color: #004849;
+    font-weight: bold;
+    display: inline-block;
+    background-color: #E3E8EB;
+    border-radius: 2px;
+    padding: 1px 4px;
 }
 
 #controller-service-tag-cloud-container {
@@ -38,34 +44,21 @@
     padding: 0px;
 }
 
-#controller-service-type-container {
-    padding: 20px 0 5px 0;
-    display: flex;
-}
-
 #controller-service-type-name {
+    min-height: 15px;
     color: #775351;
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 500;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
 }
 
-#controller-service-type-bundle {
-    margin-left: 15px;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-size: 13px;
-    line-height: 16px;
-    color: #666;
-    letter-spacing: 0.25px;
-    min-width: 0;
+#controller-service-type-name-title {
+    font-family: Roboto Slab;
+    padding: 20px 0 5px 0;
+    font-size: 12px;
 }
 
 #controller-service-type-description {
-    height: 80px;
+    height: 62px;
     font-size: 13px;
     line-height: 17px;
     padding-top: 10px;
@@ -94,8 +87,4 @@
 
 #controller-service-type-filter {
     width: 200px;
-}
-
-#controller-service-tag-cloud {
-    margin-top: -2px;
 }

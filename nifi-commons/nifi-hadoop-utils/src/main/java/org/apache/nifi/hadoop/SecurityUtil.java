@@ -28,8 +28,6 @@ import java.io.IOException;
  * interfering with each other.
  */
 public class SecurityUtil {
-    public static final String HADOOP_SECURITY_AUTHENTICATION = "hadoop.security.authentication";
-    public static final String KERBEROS = "kerberos";
 
     /**
      * Initializes UserGroupInformation with the given Configuration and performs the login for the given principal
@@ -83,7 +81,7 @@ public class SecurityUtil {
      */
     public static boolean isSecurityEnabled(final Configuration config) {
         Validate.notNull(config);
-        return KERBEROS.equalsIgnoreCase(config.get(HADOOP_SECURITY_AUTHENTICATION));
+        return "kerberos".equalsIgnoreCase(config.get("hadoop.security.authentication"));
     }
 
     /**

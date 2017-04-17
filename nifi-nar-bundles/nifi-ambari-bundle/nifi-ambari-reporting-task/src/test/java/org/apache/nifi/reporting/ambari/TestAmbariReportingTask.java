@@ -110,8 +110,6 @@ public class TestAmbariReportingTask {
                 .thenReturn(new MockPropertyValue(applicationId));
         Mockito.when(context.getProperty(AmbariReportingTask.HOSTNAME))
                 .thenReturn(new MockPropertyValue(hostName));
-        Mockito.when(context.getProperty(AmbariReportingTask.PROCESS_GROUP_ID))
-                .thenReturn(new MockPropertyValue("1234"));
 
 
         final EventAccess eventAccess = Mockito.mock(EventAccess.class);
@@ -124,7 +122,6 @@ public class TestAmbariReportingTask {
         task.setup(configurationContext);
         task.onTrigger(context);
     }
-
     // override the creation of the client to provide a mock
     private class TestableAmbariReportingTask extends AmbariReportingTask {
 

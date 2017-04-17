@@ -29,12 +29,7 @@ public class GenericDatabaseAdapter implements DatabaseAdapter {
     }
 
     @Override
-    public String getDescription() {
-        return "Generates ANSI SQL";
-    }
-
-    @Override
-    public String getSelectStatement(String tableName, String columnNames, String whereClause, String orderByClause, Long limit, Long offset) {
+    public String getSelectStatement(String tableName, String columnNames, String whereClause, String orderByClause, Integer limit, Integer offset) {
         if (StringUtils.isEmpty(tableName)) {
             throw new IllegalArgumentException("Table name cannot be null or empty");
         }

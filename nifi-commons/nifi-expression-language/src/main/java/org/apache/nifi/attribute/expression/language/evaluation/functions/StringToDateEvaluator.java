@@ -21,7 +21,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
-import java.util.TimeZone;
 
 import org.apache.nifi.attribute.expression.language.evaluation.DateEvaluator;
 import org.apache.nifi.attribute.expression.language.evaluation.DateQueryResult;
@@ -33,12 +32,10 @@ public class StringToDateEvaluator extends DateEvaluator {
 
     private final Evaluator<String> subject;
     private final Evaluator<String> format;
-    private final Evaluator<String> timeZone;
 
-    public StringToDateEvaluator(final Evaluator<String> subject, final Evaluator<String> format, final Evaluator<String> timeZone) {
+    public StringToDateEvaluator(final Evaluator<String> subject, final Evaluator<String> format) {
         this.subject = subject;
         this.format = format;
-        this.timeZone = timeZone;
     }
 
     @Override
@@ -49,18 +46,8 @@ public class StringToDateEvaluator extends DateEvaluator {
             return new DateQueryResult(null);
         }
 
-        final SimpleDateFormat sdf = new SimpleDateFormat(formatValue, Locale.US);
-
-        if(timeZone != null) {
-            final QueryResult<String> tzResult = timeZone.evaluate(attributes);
-            final String tz = tzResult.getValue();
-            if(tz != null && TimeZone.getTimeZone(tz) != null) {
-                sdf.setTimeZone(TimeZone.getTimeZone(tz));
-            }
-        }
-
         try {
-            return new DateQueryResult(sdf.parse(subjectValue));
+            return new DateQueryResult(new SimpleDateFormat(formatValue, Locale.US).parse(subjectValue));
         } catch (final ParseException e) {
             throw new IllegalAttributeException("Cannot parse attribute value as a date; date format: "
                     + formatValue + "; attribute value: " + subjectValue);

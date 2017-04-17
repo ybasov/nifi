@@ -32,13 +32,4 @@ public interface RowSerializer {
      * @throws IOException if unable to serialize the row
      */
     void serialize(byte[] rowKey, ResultCell[] cells, OutputStream out) throws IOException;
-
-    /**
-     *
-     * @param rowKey the row key of the row being serialized
-     * @param cells the cells of the row being serialized
-     * @return the serialized string representing the row
-     */
-    String serialize(byte[] rowKey, ResultCell[] cells);
-
 }

@@ -15,19 +15,9 @@
  * limitations under the License.
  */
 
-/* global define, module, require, exports */
+/* global nf, d3 */
 
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define(['angular'], function (angular) {
-            return (nf.ng.Bridge = factory(angular));
-        });
-    } else if (typeof exports === 'object' && typeof module === 'object') {
-        module.exports = (nf.ng.Bridge = factory(require('angular')));
-    } else {
-        nf.ng.Bridge = factory(root.angular);
-    }
-}(this, function (angular) {
+nf.ng.Bridge = (function () {
     'use strict';
 
     function AngularBridge() {
@@ -94,5 +84,7 @@
         }
     };
 
-    return new AngularBridge();
-}));
+    var angularBridge = new AngularBridge();
+
+    return angularBridge;
+}());

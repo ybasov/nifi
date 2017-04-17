@@ -49,13 +49,22 @@
     display: none;
 }
 
-div.remote-process-group-setting-left, div.remote-process-group-setting-right {
+#remote-process-group-transport-protocol-combo {
+    width: 160px;
+}
+
+div.remote-process-group-timeout-setting, div.remote-process-group-yield-duration-setting,
+div.remote-process-group-proxy-host-setting, div.remote-process-group-proxy-port-setting,
+div.remote-process-group-proxy-user-setting, div.remote-process-group-proxy-password-setting {
     float: left;
     width: 49%;
 }
 
-div.remote-process-group-setting-right {
+div.remote-process-group-yield-duration-setting,
+div.remote-process-group-proxy-port-setting,
+div.remote-process-group-proxy-password-setting {
     margin-left: 2%;
+    width: 49%;
 }
 
 /* remote process group port configuration */

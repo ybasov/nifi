@@ -26,7 +26,6 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -140,6 +139,6 @@ public class TestPopularVoteFlowElection {
     }
 
     private DataFlow createDataFlow(final byte[] flow) {
-        return new StandardDataFlow(flow, new byte[0], new byte[0], new HashSet<>());
+        return new StandardDataFlow(flow, new byte[0], new byte[0]);
     }
 }
